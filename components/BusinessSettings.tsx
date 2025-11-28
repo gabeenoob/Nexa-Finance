@@ -122,7 +122,12 @@ const BusinessSettings: React.FC<BusinessSettingsProps> = ({
   const now = new Date();
   // Filter strictly for current month/year
   const paidFixedCosts = transactions
-      .filter(t => t.category === 'Custos Fixos' && t.type === 'expense' && t.date.getMonth() === now.getMonth() && t.date.getFullYear() === now.getFullYear())
+      .filter(t => 
+          t.category === 'Custos Fixos' && 
+          t.type === 'expense' && 
+          t.date.getMonth() === now.getMonth() && 
+          t.date.getFullYear() === now.getFullYear()
+      )
       .reduce((acc, t) => acc + t.amount, 0);
 
   const pendingAmount = Math.max(0, totalEstimated - paidFixedCosts);

@@ -108,7 +108,7 @@ export const transactionService = {
       tags: tx.tags,
       account_id: tx.accountId,
       location: tx.location,
-      // CORREÇÃO CRÍTICA: Forçar null se for undefined para evitar erro de constraint
+      // Create: Force null if undefined
       project_id: tx.projectId || null 
     });
 
@@ -125,7 +125,8 @@ export const transactionService = {
   },
 
   async update(id: string, tx: Partial<Transaction>) {
-    const payload = sanitizePayload({
+    // Update: Only include foreign key if it's explicitly defined in the update object
+    const rawPayload: any = {
       type: tx.type,
       amount: tx.amount,
       description: tx.description,
@@ -133,9 +134,13 @@ export const transactionService = {
       category: tx.category,
       tags: tx.tags,
       account_id: tx.accountId,
-      // CORREÇÃO CRÍTICA: Forçar null se for undefined
-      project_id: tx.projectId || null
-    });
+    };
+
+    if (tx.projectId !== undefined) {
+      rawPayload.project_id = tx.projectId || null;
+    }
+
+    const payload = sanitizePayload(rawPayload);
 
     const { data, error } = await supabase.from('transactions').update(payload).eq('id', id).select().single();
     if (error) handleError(error, 'updateTransaction');
@@ -207,7 +212,6 @@ export const projectService = {
     const payload = sanitizePayload({
       user_id: userId,
       name: project.name,
-      // CORREÇÃO CRÍTICA: Forçar null se for undefined ou vazio
       client_id: project.clientId || null,
       value: project.value,
       cost: project.cost,
@@ -230,16 +234,20 @@ export const projectService = {
   },
 
   async update(id: string, project: Partial<Project>) {
-    const payload = sanitizePayload({
+    const rawPayload: any = {
       name: project.name,
-      // CORREÇÃO CRÍTICA: Forçar null se for undefined
-      client_id: project.clientId || null,
       value: project.value,
       cost: project.cost,
       description: project.description,
       start_date: project.startDate?.toISOString(),
       deadline: project.deadline?.toISOString() || null
-    });
+    };
+
+    if (project.clientId !== undefined) {
+      rawPayload.client_id = project.clientId || null;
+    }
+
+    const payload = sanitizePayload(rawPayload);
 
     const { data, error } = await supabase.from('projects').update(payload).eq('id', id).select().single();
     if (error) handleError(error, 'updateProject');

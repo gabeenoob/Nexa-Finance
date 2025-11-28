@@ -159,8 +159,25 @@ const App: React.FC = () => {
 
   const handleUpdateProject = (id: string, p: any) => safeExecute(async () => {
     if(!user) return;
-    const updated = await projectService.update(id, p);
-    setProjects(prev => prev.map(proj => proj.id === id ? updated : proj));
+    
+    // 1. Update the Project
+    const updatedProject = await projectService.update(id, p);
+    setProjects(prev => prev.map(proj => proj.id === id ? updatedProject : proj));
+
+    // 2. Automatically Update Linked Transaction if exists
+    const linkedTx = transactions.find(t => t.projectId === id);
+    if (linkedTx) {
+      const newDescription = p.name ? `Projeto: ${p.name}` : linkedTx.description;
+      const newAmount = p.value !== undefined ? Number(p.value) : linkedTx.amount;
+      const newDate = p.startDate ? new Date(p.startDate) : linkedTx.date;
+
+      const updatedTx = await transactionService.update(linkedTx.id, {
+        description: newDescription,
+        amount: newAmount,
+        date: newDate
+      });
+      setTransactions(prev => prev.map(t => t.id === linkedTx.id ? updatedTx : t));
+    }
   });
 
   const handleCreateClient = (c: any) => safeExecute(async () => {
@@ -289,13 +306,26 @@ const App: React.FC = () => {
   const totalExpense = filteredTransactions.filter(t => t.type === 'expense').reduce((acc, t) => acc + t.amount, 0);
   const totalCashBalance = transactions.filter(t => t.accountId === accountType).reduce((acc, t) => t.type === 'income' ? acc + t.amount : acc - t.amount, 0);
   
-  // Calculate new projects in the current month
-  const currentMonth = new Date().getMonth();
-  const currentYear = new Date().getFullYear();
-  const newProjectsCount = projects.filter(p => {
-      const pDate = new Date(p.startDate);
-      return pDate.getMonth() === currentMonth && pDate.getFullYear() === currentYear;
-  }).length;
+  // Calculate new projects based on selected time filter
+  const getFilteredProjects = () => {
+      const now = new Date();
+      return projects.filter(p => {
+          const pDate = new Date(p.startDate);
+          
+          if (timeFilter === 'year') {
+              return pDate.getFullYear() === now.getFullYear();
+          }
+          if (timeFilter === 'month') {
+              return pDate.getMonth() === now.getMonth() && pDate.getFullYear() === now.getFullYear();
+          }
+          // Week
+          const start = new Date(now); start.setDate(now.getDate() - now.getDay()); start.setHours(0,0,0,0);
+          const end = new Date(start); end.setDate(start.getDate() + 6); end.setHours(23,59,59,999);
+          return pDate >= start && pDate <= end;
+      });
+  };
+  const newProjectsCount = getFilteredProjects().length;
+  const projectLabel = timeFilter === 'month' ? 'Neste Mês' : timeFilter === 'year' ? 'Neste Ano' : 'Nesta Semana';
 
   return (
     <div className={`min-h-screen font-sans text-slate-800 dark:text-slate-100 transition-colors duration-500 ${isDarkMode ? 'bg-black' : 'bg-[#F0F2F5]'}`}>
@@ -365,7 +395,7 @@ const App: React.FC = () => {
                       <div className="bg-white dark:bg-white/5 dark:backdrop-blur-xl p-6 rounded-3xl shadow-sm border border-slate-200 dark:border-white/10 transition-all hover:scale-[1.01] hover:shadow-md">
                         <div className="flex items-center gap-2 mb-3 text-purple-600 dark:text-purple-400"><FolderPlus size={20} /><span className="text-xs font-bold uppercase tracking-wider">Novos Projetos</span></div>
                         <div className="text-3xl xl:text-4xl font-black text-slate-800 dark:text-white tracking-tight">{newProjectsCount}</div>
-                        <div className="text-[10px] text-slate-400 mt-1 uppercase font-bold">Neste mês</div>
+                        <div className="text-[10px] text-slate-400 mt-1 uppercase font-bold">{projectLabel}</div>
                       </div>
                   </div>
                 </div>
