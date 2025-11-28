@@ -235,7 +235,6 @@ const App: React.FC = () => {
         }
         else if (type === 'cost') {
             await fixedCostService.delete(id);
-            // Updating UI after confirmation for consistency
             setFixedCosts(prev => prev.filter(c => c.id !== id));
         }
     } catch (error) {
@@ -366,6 +365,7 @@ const App: React.FC = () => {
                       <div className="bg-white dark:bg-white/5 dark:backdrop-blur-xl p-6 rounded-3xl shadow-sm border border-slate-200 dark:border-white/10 transition-all hover:scale-[1.01] hover:shadow-md">
                         <div className="flex items-center gap-2 mb-3 text-purple-600 dark:text-purple-400"><FolderPlus size={20} /><span className="text-xs font-bold uppercase tracking-wider">Novos Projetos</span></div>
                         <div className="text-3xl xl:text-4xl font-black text-slate-800 dark:text-white tracking-tight">{newProjectsCount}</div>
+                        <div className="text-[10px] text-slate-400 mt-1 uppercase font-bold">Neste mês</div>
                       </div>
                   </div>
                 </div>

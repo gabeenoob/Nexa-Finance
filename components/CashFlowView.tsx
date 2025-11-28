@@ -30,7 +30,7 @@ const CashFlowView: React.FC<CashFlowViewProps> = ({ settings, transactions, fix
 
   const realTotalBalance = calculateRealBalance();
   
-  // 2. Total Fixed Costs (Target Base) - Calculated from passed prop for instant update
+  // 2. Total Fixed Costs (Target Base) - Calculated directly from prop for instant update
   const totalFixedCosts = fixedCosts.reduce((acc, curr) => acc + curr.defaultAmount, 0);
   
   // 3. AUTOMATIC Working Capital Calculation
@@ -40,7 +40,7 @@ const CashFlowView: React.FC<CashFlowViewProps> = ({ settings, transactions, fix
   // 4. Calculate "Free Cash" (Real Balance - Working Capital)
   const freeCash = realTotalBalance - workingCapital;
 
-  // Percentage for progress bars
+  // Progress calculations
   const wcProgress = realTotalBalance > 0 ? Math.min((workingCapital / realTotalBalance) * 100, 100) : 0;
   const freeProgress = realTotalBalance > 0 ? Math.max(0, 100 - wcProgress) : 0;
 
@@ -64,10 +64,10 @@ const CashFlowView: React.FC<CashFlowViewProps> = ({ settings, transactions, fix
             </div>
         </div>
 
-        {/* Hero Card: Real Balance - MATCHING BALANCECARD DESIGN */}
+        {/* Hero Card: Real Balance - MATCHING BALANCECARD DESIGN (Gradient + Glassmorphism in Dark) */}
         <div className="relative overflow-hidden bg-gradient-to-br from-slate-900 to-slate-800 dark:from-white/10 dark:to-white/5 dark:backdrop-blur-xl dark:border dark:border-white/10 rounded-3xl p-8 shadow-xl shadow-slate-900/20 dark:shadow-black/20 text-white flex flex-col md:flex-row items-center justify-between gap-8 group">
-            {/* Decorative Blur */}
-            <div className="absolute top-0 right-0 w-96 h-96 bg-white/5 dark:bg-blue-500/20 rounded-full -mr-32 -mt-32 blur-3xl pointer-events-none"></div>
+            {/* Decorative Blur matching BalanceCard */}
+            <div className="absolute top-0 right-0 w-64 h-64 bg-white/5 dark:bg-blue-500/20 rounded-full -mr-16 -mt-16 blur-3xl pointer-events-none"></div>
             
             <div className="relative z-10 text-center md:text-left">
                 <p className="text-sm font-bold uppercase tracking-widest opacity-60 mb-2 flex items-center gap-2 md:justify-start justify-center">
@@ -106,58 +106,52 @@ const CashFlowView: React.FC<CashFlowViewProps> = ({ settings, transactions, fix
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
             
-            {/* Visual Breakdown */}
+            {/* Capital de Giro Visualization */}
             <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 p-8">
                 <h3 className="font-bold text-lg text-slate-800 dark:text-white mb-6 flex items-center gap-2">
-                    <Target className="text-blue-500" size={20}/> Distribuição do Saldo
+                    <Target className="text-blue-500" size={20}/> Capital de Giro
                 </h3>
 
                 <div className="space-y-8">
                     {/* Visual Bar */}
-                    <div className="relative h-12 w-full bg-slate-100 dark:bg-slate-700 rounded-2xl overflow-hidden flex shadow-inner">
+                    <div className="relative h-14 w-full bg-slate-100 dark:bg-slate-700 rounded-2xl overflow-hidden flex shadow-inner border border-slate-200 dark:border-slate-600">
                         <div 
-                            className="h-full bg-amber-400/90 flex items-center justify-center text-[10px] font-bold text-amber-900 transition-all duration-1000"
+                            className="h-full bg-amber-400 dark:bg-amber-500 flex items-center justify-center text-[10px] font-bold text-amber-950 transition-all duration-1000 relative group"
                             style={{ width: `${wcProgress}%` }}
                         >
-                            {wcProgress > 15 && 'GIRO'}
+                            {wcProgress > 15 && 'RESERVADO'}
+                            <div className="absolute inset-0 bg-white/20 opacity-0 group-hover:opacity-100 transition-opacity"></div>
                         </div>
                         <div 
-                            className={`h-full flex items-center justify-center text-[10px] font-bold transition-all duration-1000 ${freeCash >= 0 ? 'bg-emerald-500/90 text-emerald-50' : 'bg-red-500/90 text-red-50'}`}
+                            className={`h-full flex items-center justify-center text-[10px] font-bold transition-all duration-1000 relative group ${freeCash >= 0 ? 'bg-emerald-500 dark:bg-emerald-600 text-emerald-50' : 'bg-red-500 dark:bg-red-600 text-red-50'}`}
                             style={{ width: `${freeProgress}%` }}
                         >
                             {freeProgress > 15 && 'LIVRE'}
+                            <div className="absolute inset-0 bg-white/20 opacity-0 group-hover:opacity-100 transition-opacity"></div>
                         </div>
                     </div>
 
-                    <div className="space-y-4">
-                        <div className="flex items-center justify-between p-4 rounded-xl bg-amber-50 dark:bg-amber-900/10 border border-amber-100 dark:border-amber-900/20">
-                            <div className="flex items-center gap-3">
-                                <div className="p-2 bg-amber-100 dark:bg-amber-900/30 rounded-lg text-amber-600 dark:text-amber-400">
-                                    <TrendingUp size={20} />
-                                </div>
-                                <div>
-                                    <p className="font-bold text-slate-700 dark:text-white">Capital de Giro Necessário</p>
-                                    <p className="text-xs text-slate-500 dark:text-slate-400">Baseado em {wcPercentage}% dos Custos Fixos</p>
-                                </div>
+                    <div className="grid grid-cols-2 gap-4">
+                        <div className="flex flex-col gap-2 p-4 rounded-xl bg-amber-50 dark:bg-amber-900/10 border border-amber-100 dark:border-amber-900/20">
+                            <div className="flex items-center gap-2 text-amber-600 dark:text-amber-400">
+                                <TrendingUp size={16} />
+                                <span className="text-xs font-bold uppercase">Reservado</span>
                             </div>
-                            <div className="text-right">
-                                <p className="font-bold text-amber-600 dark:text-amber-400 text-lg">{isVisible ? `R$ ${workingCapital.toLocaleString()}` : '••••'}</p>
+                            <div className="text-xl font-bold text-slate-800 dark:text-white">
+                                {isVisible ? `R$ ${workingCapital.toLocaleString('pt-BR', {compactDisplay: 'short'})}` : '••••'}
                             </div>
+                            <p className="text-[10px] text-slate-500">Obrigatório</p>
                         </div>
 
-                        <div className={`flex items-center justify-between p-4 rounded-xl border ${freeCash >= 0 ? 'bg-emerald-50 dark:bg-emerald-900/10 border-emerald-100 dark:border-emerald-900/20' : 'bg-red-50 dark:bg-red-900/10 border-red-100 dark:border-red-900/20'}`}>
-                            <div className="flex items-center gap-3">
-                                <div className={`p-2 rounded-lg ${freeCash >= 0 ? 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400' : 'bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400'}`}>
-                                    <ArrowRight size={20} />
-                                </div>
-                                <div>
-                                    <p className="font-bold text-slate-700 dark:text-white">Caixa Livre Real</p>
-                                    <p className="text-xs text-slate-500 dark:text-slate-400">O que sobra após reservas</p>
-                                </div>
+                        <div className={`flex flex-col gap-2 p-4 rounded-xl border ${freeCash >= 0 ? 'bg-emerald-50 dark:bg-emerald-900/10 border-emerald-100 dark:border-emerald-900/20' : 'bg-red-50 dark:bg-red-900/10 border-red-100 dark:border-red-900/20'}`}>
+                            <div className={`flex items-center gap-2 ${freeCash >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'}`}>
+                                <ArrowRight size={16} />
+                                <span className="text-xs font-bold uppercase">Disponível</span>
                             </div>
-                            <div className="text-right">
-                                <p className={`font-bold text-lg ${freeCash >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'}`}>{isVisible ? `R$ ${freeCash.toLocaleString()}` : '••••'}</p>
+                            <div className="text-xl font-bold text-slate-800 dark:text-white">
+                                {isVisible ? `R$ ${freeCash.toLocaleString('pt-BR', {compactDisplay: 'short'})}` : '••••'}
                             </div>
+                            <p className="text-[10px] text-slate-500">Para uso</p>
                         </div>
                     </div>
                 </div>

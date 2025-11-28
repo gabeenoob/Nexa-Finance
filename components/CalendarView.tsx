@@ -150,22 +150,22 @@ const CalendarView: React.FC<CalendarViewProps> = ({ transactions, isVisible, ti
   const nextMonth = () => setCurrentDate(new Date(year, month + 1, 1));
 
   return (
-    <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 p-6">
-      <div className="flex items-center justify-between mb-6">
-        <h2 className="text-xl font-bold text-slate-800 dark:text-white capitalize">{monthNames[month]} {year}</h2>
+    <div className="bg-white dark:bg-slate-800 rounded-3xl shadow-sm border border-slate-200 dark:border-slate-700 p-6 transition-all duration-300">
+      <div className="flex items-center justify-between mb-8">
+        <h2 className="text-2xl font-black text-slate-800 dark:text-white capitalize tracking-tight">{monthNames[month]} <span className="text-slate-400">{year}</span></h2>
         <div className="flex gap-2 text-slate-500">
-            <button onClick={prevMonth} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-full"><ChevronLeft size={20}/></button>
-            <button onClick={nextMonth} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-full"><ChevronRight size={20}/></button>
+            <button onClick={prevMonth} className="p-2.5 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-xl transition-colors"><ChevronLeft size={20}/></button>
+            <button onClick={nextMonth} className="p-2.5 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-xl transition-colors"><ChevronRight size={20}/></button>
         </div>
       </div>
       
-      <div className="grid grid-cols-7 gap-2 lg:gap-3">
+      <div className="grid grid-cols-7 gap-3 lg:gap-4">
         {['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'].map(d => (
           <div key={d} className="text-center text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">{d}</div>
         ))}
 
         {Array.from({ length: firstDayOfMonth }).map((_, i) => (
-            <div key={`empty-${i}`} className="min-h-[100px]"></div>
+            <div key={`empty-${i}`} className="min-h-[120px]"></div>
         ))}
 
         {Array.from({ length: daysInMonth }).map((_, i) => {
@@ -176,30 +176,32 @@ const CalendarView: React.FC<CalendarViewProps> = ({ transactions, isVisible, ti
           
           return (
             <div key={i} className={`
-              min-h-[110px] border border-slate-100 dark:border-slate-700 rounded-2xl p-2 relative hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors flex flex-col justify-between group
-              ${isToday ? 'ring-2 ring-blue-500 bg-blue-50/20 dark:bg-blue-900/10' : ''}
+              min-h-[120px] border rounded-3xl p-3 relative transition-all duration-200 flex flex-col justify-between group
+              ${isToday 
+                ? 'border-blue-500 bg-blue-50/50 dark:bg-blue-900/20 shadow-md shadow-blue-500/10' 
+                : 'border-slate-100 dark:border-slate-700/50 hover:border-slate-300 dark:hover:border-slate-600 hover:shadow-lg hover:shadow-slate-200/50 dark:hover:shadow-black/20 bg-white dark:bg-slate-800'}
             `}>
               <div className="flex justify-between items-start mb-2">
-                  <span className={`text-sm font-bold w-7 h-7 flex items-center justify-center rounded-full ${isToday ? 'bg-blue-500 text-white shadow-md' : 'text-slate-700 dark:text-slate-400 bg-slate-100 dark:bg-slate-800'}`}>{i+1}</span>
+                  <span className={`text-sm font-bold w-8 h-8 flex items-center justify-center rounded-full ${isToday ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/30' : 'text-slate-600 dark:text-slate-400'}`}>{i+1}</span>
                   {dayTxs.length > 0 && (
-                      <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${dailyTotal >= 0 ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/50 dark:text-emerald-300' : 'bg-red-100 text-red-700 dark:bg-red-900/50 dark:text-red-300'}`}>
+                      <span className={`text-[10px] font-bold px-2 py-1 rounded-full ${dailyTotal >= 0 ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/50 dark:text-emerald-300' : 'bg-red-100 text-red-700 dark:bg-red-900/50 dark:text-red-300'}`}>
                           {isVisible ? `R$ ${dailyTotal.toLocaleString(undefined, {compactDisplay: 'short'})}` : '•'}
                       </span>
                   )}
               </div>
               
-              <div className="space-y-1 overflow-hidden">
+              <div className="space-y-1.5 overflow-hidden">
                 {dayTxs.slice(0, 2).map((tx, idx) => (
-                  <div key={idx} className={`text-[9px] truncate px-2 py-1 rounded-full font-medium shadow-sm border border-transparent ${
-                    tx.type === 'income' ? 'bg-white text-emerald-600 border-emerald-100 dark:bg-emerald-900/20 dark:border-emerald-800' :
-                    tx.type === 'expense' ? 'bg-white text-red-600 border-red-100 dark:bg-red-900/20 dark:border-red-800' :
-                    'bg-white text-blue-600 border-blue-100'
+                  <div key={idx} className={`text-[10px] truncate px-2.5 py-1 rounded-full font-bold border ${
+                    tx.type === 'income' ? 'bg-emerald-50 text-emerald-700 border-emerald-100 dark:bg-emerald-900/20 dark:border-emerald-800/50 dark:text-emerald-400' :
+                    tx.type === 'expense' ? 'bg-red-50 text-red-700 border-red-100 dark:bg-red-900/20 dark:border-red-800/50 dark:text-red-400' :
+                    'bg-blue-50 text-blue-700 border-blue-100 dark:bg-blue-900/20 dark:border-blue-800/50 dark:text-blue-400'
                   }`}>
                      {tx.description}
                   </div>
                 ))}
                 {dayTxs.length > 2 && (
-                   <div className="text-[9px] text-slate-400 text-center font-bold">+ {dayTxs.length - 2} mais</div>
+                   <div className="text-[10px] text-slate-400 text-center font-bold bg-slate-50 dark:bg-slate-800/50 rounded-full py-0.5 border border-slate-100 dark:border-slate-700">+ {dayTxs.length - 2} mais</div>
                 )}
               </div>
             </div>
