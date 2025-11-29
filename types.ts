@@ -1,3 +1,4 @@
+
 export type AccountType = 'personal' | 'business';
 
 export interface Tag {
@@ -69,7 +70,6 @@ export interface Project {
   deadline?: Date;
   status?: string; 
   value: number; 
-  cost: number; 
   description?: string;
   linkedTransactionId?: string;
 }

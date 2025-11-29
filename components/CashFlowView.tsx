@@ -1,8 +1,7 @@
 
 import React from 'react';
 import { AppSettings, Transaction, AccountType, BusinessConfig, FixedCostTemplate } from '../types';
-import { Target, AlertCircle, PieChart, Info, Wallet, TrendingUp, TrendingDown, ArrowRight } from 'lucide-react';
-import { PieChart as RechartsPie, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
+import { Target, AlertCircle, PieChart, Info, Wallet, TrendingUp, TrendingDown, ArrowRight, ShieldCheck, Hourglass } from 'lucide-react';
 
 interface CashFlowViewProps {
   settings: AppSettings;
@@ -30,19 +29,24 @@ const CashFlowView: React.FC<CashFlowViewProps> = ({ settings, transactions, fix
 
   const realTotalBalance = calculateRealBalance();
   
-  // 2. Total Fixed Costs (Target Base) - Calculated directly from prop for instant update
+  // 2. Total Fixed Costs (Monthly Base)
   const totalFixedCosts = fixedCosts.reduce((acc, curr) => acc + curr.defaultAmount, 0);
   
-  // 3. AUTOMATIC Working Capital Calculation
-  const wcPercentage = currentScope.cashFlow.workingCapitalPercent || 50;
-  const workingCapital = totalFixedCosts * (wcPercentage / 100);
+  // 3. AUTOMATIC Working Capital Calculation (Calculation Redesign)
+  // New Logic: User sets a percentage of fixed costs they want to keep as reserve.
+  // 100% = 1 month of coverage. 600% = 6 months.
+  const reserveRatio = currentScope.cashFlow.workingCapitalPercent || 100; // Default to 1 month (100%)
+  const requiredReserve = totalFixedCosts * (reserveRatio / 100);
 
-  // 4. Calculate "Free Cash" (Real Balance - Working Capital)
-  const freeCash = realTotalBalance - workingCapital;
+  // 4. Free Cash Calculation
+  const freeCash = realTotalBalance - requiredReserve;
 
-  // Progress calculations
-  const wcProgress = realTotalBalance > 0 ? Math.min((workingCapital / realTotalBalance) * 100, 100) : 0;
-  const freeProgress = realTotalBalance > 0 ? Math.max(0, 100 - wcProgress) : 0;
+  // 5. Runway Calculation (Months of Survival)
+  const runwayMonths = totalFixedCosts > 0 ? (realTotalBalance / totalFixedCosts) : 0;
+
+  // Progress Bar Widths
+  const reserveProgress = realTotalBalance > 0 ? Math.min((requiredReserve / realTotalBalance) * 100, 100) : 0;
+  const freeProgress = realTotalBalance > 0 ? Math.max(0, 100 - reserveProgress) : 0;
 
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
@@ -51,27 +55,28 @@ const CashFlowView: React.FC<CashFlowViewProps> = ({ settings, transactions, fix
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
             <div>
                 <h1 className="text-2xl font-bold text-slate-800 dark:text-white flex items-center gap-2">
-                    <PieChart className="text-blue-600" /> Fluxo de Caixa Inteligente
+                    <PieChart className="text-blue-600" /> Gestão de Capital de Giro
                 </h1>
                 <p className="text-slate-500 text-sm mt-1">
-                    Análise automática baseada nos seus Custos Fixos ({wcPercentage}% de alocação).
+                    Análise de sustentabilidade financeira baseada nos seus custos fixos.
                 </p>
             </div>
             {/* Status Badge */}
-            <div className={`flex items-center gap-2 px-4 py-2 rounded-full border text-sm font-bold w-fit ${freeCash >= 0 ? 'bg-emerald-50 text-emerald-600 border-emerald-200 dark:bg-emerald-900/20 dark:border-emerald-800' : 'bg-red-50 text-red-600 border-red-200 dark:bg-red-900/20 dark:border-red-800'}`}>
-                <Info size={16} />
-                {freeCash >= 0 ? 'Saúde Financeira Positiva' : 'Atenção: Caixa Livre Negativo'}
+            <div className={`flex items-center gap-2 px-4 py-2 rounded-full border text-sm font-bold w-fit ${freeCash >= 0 ? 'bg-emerald-50 text-emerald-600 border-emerald-200 dark:bg-emerald-900/20 dark:border-emerald-800' : 'bg-amber-50 text-amber-600 border-amber-200 dark:bg-amber-900/20 dark:border-amber-800'}`}>
+                {freeCash >= 0 ? <ShieldCheck size={18} /> : <AlertCircle size={18} />}
+                {freeCash >= 0 ? 'Reserva Garantida' : 'Abaixo da Reserva Ideal'}
             </div>
         </div>
 
-        {/* Hero Card: Real Balance - MATCHING BALANCECARD DESIGN (Gradient + Glassmorphism in Dark) */}
+        {/* Hero Card: Real Balance with Glassmorphism */}
         <div className="relative overflow-hidden bg-gradient-to-br from-slate-900 to-slate-800 dark:from-white/10 dark:to-white/5 dark:backdrop-blur-xl dark:border dark:border-white/10 rounded-3xl p-8 shadow-xl shadow-slate-900/20 dark:shadow-black/20 text-white flex flex-col md:flex-row items-center justify-between gap-8 group">
-            {/* Decorative Blur matching BalanceCard */}
-            <div className="absolute top-0 right-0 w-64 h-64 bg-white/5 dark:bg-blue-500/20 rounded-full -mr-16 -mt-16 blur-3xl pointer-events-none"></div>
+            {/* Decorative Elements */}
+            <div className="absolute top-0 right-0 w-64 h-64 bg-blue-500/20 rounded-full -mr-16 -mt-16 blur-3xl pointer-events-none"></div>
+            <div className="absolute bottom-0 left-0 w-48 h-48 bg-emerald-500/10 rounded-full -ml-10 -mb-10 blur-3xl pointer-events-none"></div>
             
-            <div className="relative z-10 text-center md:text-left">
+            <div className="relative z-10 text-center md:text-left flex-1">
                 <p className="text-sm font-bold uppercase tracking-widest opacity-60 mb-2 flex items-center gap-2 md:justify-start justify-center">
-                    <Wallet size={16} /> Saldo Real em Conta
+                    <Wallet size={16} /> Saldo Real Disponível
                 </p>
                 <div className="text-5xl md:text-6xl font-black tracking-tight flex items-baseline justify-center md:justify-start gap-1 drop-shadow-sm">
                     {isVisible ? (
@@ -81,110 +86,108 @@ const CashFlowView: React.FC<CashFlowViewProps> = ({ settings, transactions, fix
                         </>
                     ) : '••••••••'}
                 </div>
+                <div className="mt-4 inline-flex items-center gap-2 px-3 py-1.5 bg-white/10 rounded-lg text-xs font-bold border border-white/10">
+                    <Hourglass size={14} className="text-blue-300" />
+                    <span>Fôlego Financeiro (Runway): <span className="text-white text-sm">{runwayMonths.toFixed(1)} meses</span></span>
+                </div>
             </div>
 
+            {/* Mini breakdown cards inside hero */}
             <div className="relative z-10 flex flex-col sm:flex-row gap-4 w-full md:w-auto">
-                 <div className="bg-white/10 dark:bg-slate-900/20 backdrop-blur-md rounded-2xl p-5 flex-1 border border-white/10 dark:border-white/5 min-w-[200px]">
+                 <div className="bg-slate-950/30 dark:bg-slate-900/40 backdrop-blur-md rounded-2xl p-5 flex-1 border border-white/5 min-w-[220px]">
                      <div className="flex items-center gap-2 mb-2">
-                        <div className="w-2 h-2 rounded-full bg-amber-400"></div>
-                        <p className="text-xs font-bold uppercase opacity-80">Capital de Giro</p>
+                        <div className="w-2 h-2 rounded-full bg-amber-400 box-shadow-glow"></div>
+                        <p className="text-xs font-bold uppercase opacity-80">Reserva Necessária</p>
                      </div>
-                     <p className="text-2xl font-bold text-amber-300">{isVisible ? `R$ ${workingCapital.toLocaleString('pt-BR', {compactDisplay: 'short'})}` : '••••'}</p>
-                     <p className="text-[10px] opacity-60 mt-1">Reservado para operações</p>
+                     <p className="text-2xl font-bold text-amber-300">{isVisible ? `R$ ${requiredReserve.toLocaleString('pt-BR', {compactDisplay: 'short'})}` : '••••'}</p>
+                     <p className="text-[10px] opacity-60 mt-1">{reserveRatio}% dos Custos Fixos</p>
                  </div>
                  
-                 <div className="bg-white/10 dark:bg-slate-900/20 backdrop-blur-md rounded-2xl p-5 flex-1 border border-white/10 dark:border-white/5 min-w-[200px]">
+                 <div className="bg-slate-950/30 dark:bg-slate-900/40 backdrop-blur-md rounded-2xl p-5 flex-1 border border-white/5 min-w-[220px]">
                      <div className="flex items-center gap-2 mb-2">
                         <div className={`w-2 h-2 rounded-full ${freeCash >= 0 ? 'bg-emerald-400' : 'bg-red-400'}`}></div>
                         <p className="text-xs font-bold uppercase opacity-80">Caixa Livre</p>
                      </div>
                      <p className={`text-2xl font-bold ${freeCash >= 0 ? 'text-emerald-300' : 'text-red-300'}`}>{isVisible ? `R$ ${freeCash.toLocaleString('pt-BR', {compactDisplay: 'short'})}` : '••••'}</p>
-                     <p className="text-[10px] opacity-60 mt-1">Disponível para reinvestir</p>
+                     <p className="text-[10px] opacity-60 mt-1">Disponível para Investir/Retirar</p>
                  </div>
             </div>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
             
-            {/* Capital de Giro Visualization */}
-            <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 p-8">
-                <h3 className="font-bold text-lg text-slate-800 dark:text-white mb-6 flex items-center gap-2">
-                    <Target className="text-blue-500" size={20}/> Capital de Giro
+            {/* Visual Bar Chart Section */}
+            <div className="lg:col-span-2 bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 p-8 flex flex-col justify-center">
+                <h3 className="font-bold text-lg text-slate-800 dark:text-white mb-8 flex items-center gap-2">
+                    <Target className="text-blue-500" size={20}/> Composição do Saldo
                 </h3>
 
-                <div className="space-y-8">
-                    {/* Visual Bar */}
-                    <div className="relative h-14 w-full bg-slate-100 dark:bg-slate-700 rounded-2xl overflow-hidden flex shadow-inner border border-slate-200 dark:border-slate-600">
+                {/* Modern Progress Bar */}
+                <div className="relative mb-4">
+                    <div className="h-16 w-full bg-slate-100 dark:bg-slate-900/50 rounded-2xl overflow-hidden flex shadow-inner relative">
+                        {/* Reserve Bar */}
                         <div 
-                            className="h-full bg-amber-400 dark:bg-amber-500 flex items-center justify-center text-[10px] font-bold text-amber-950 transition-all duration-1000 relative group"
-                            style={{ width: `${wcProgress}%` }}
+                            className="h-full bg-gradient-to-r from-amber-400 to-amber-500 flex items-center justify-center text-[10px] font-bold text-amber-950 transition-all duration-1000 relative group border-r border-white/20"
+                            style={{ width: `${reserveProgress}%` }}
                         >
-                            {wcProgress > 15 && 'RESERVADO'}
-                            <div className="absolute inset-0 bg-white/20 opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                            <span className="opacity-80 group-hover:opacity-100 transition-opacity">RESERVA</span>
                         </div>
+                        
+                        {/* Free Cash Bar */}
                         <div 
-                            className={`h-full flex items-center justify-center text-[10px] font-bold transition-all duration-1000 relative group ${freeCash >= 0 ? 'bg-emerald-500 dark:bg-emerald-600 text-emerald-50' : 'bg-red-500 dark:bg-red-600 text-red-50'}`}
+                            className={`h-full flex items-center justify-center text-[10px] font-bold transition-all duration-1000 relative group ${freeCash >= 0 ? 'bg-gradient-to-r from-emerald-400 to-emerald-500 text-emerald-950' : 'bg-transparent'}`}
                             style={{ width: `${freeProgress}%` }}
                         >
-                            {freeProgress > 15 && 'LIVRE'}
-                            <div className="absolute inset-0 bg-white/20 opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                            {freeCash >= 0 && <span className="opacity-80 group-hover:opacity-100 transition-opacity">LIVRE</span>}
                         </div>
                     </div>
 
-                    <div className="grid grid-cols-2 gap-4">
-                        <div className="flex flex-col gap-2 p-4 rounded-xl bg-amber-50 dark:bg-amber-900/10 border border-amber-100 dark:border-amber-900/20">
-                            <div className="flex items-center gap-2 text-amber-600 dark:text-amber-400">
-                                <TrendingUp size={16} />
-                                <span className="text-xs font-bold uppercase">Reservado</span>
-                            </div>
-                            <div className="text-xl font-bold text-slate-800 dark:text-white">
-                                {isVisible ? `R$ ${workingCapital.toLocaleString('pt-BR', {compactDisplay: 'short'})}` : '••••'}
-                            </div>
-                            <p className="text-[10px] text-slate-500">Obrigatório</p>
-                        </div>
-
-                        <div className={`flex flex-col gap-2 p-4 rounded-xl border ${freeCash >= 0 ? 'bg-emerald-50 dark:bg-emerald-900/10 border-emerald-100 dark:border-emerald-900/20' : 'bg-red-50 dark:bg-red-900/10 border-red-100 dark:border-red-900/20'}`}>
-                            <div className={`flex items-center gap-2 ${freeCash >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'}`}>
-                                <ArrowRight size={16} />
-                                <span className="text-xs font-bold uppercase">Disponível</span>
-                            </div>
-                            <div className="text-xl font-bold text-slate-800 dark:text-white">
-                                {isVisible ? `R$ ${freeCash.toLocaleString('pt-BR', {compactDisplay: 'short'})}` : '••••'}
-                            </div>
-                            <p className="text-[10px] text-slate-500">Para uso</p>
-                        </div>
+                    {/* Indicators below bar */}
+                    <div className="flex justify-between mt-3 text-xs font-bold text-slate-400 px-1">
+                        <span>0%</span>
+                        <span>50%</span>
+                        <span>100% Saldo</span>
                     </div>
+                </div>
+
+                <div className="mt-4 p-4 rounded-xl bg-slate-50 dark:bg-slate-900/50 border border-slate-100 dark:border-slate-700/50 text-sm text-slate-600 dark:text-slate-400">
+                    {freeCash >= 0 ? (
+                        <p>Você atingiu sua meta de reserva! <strong className="text-emerald-600 dark:text-emerald-400">R$ {isVisible ? freeCash.toLocaleString() : '...'}</strong> estão livres para reinvestimento ou distribuição de lucros sem comprometer a segurança da empresa.</p>
+                    ) : (
+                        <p>Seu saldo atual cobre apenas <strong className="text-amber-600 dark:text-amber-400">{(runwayMonths * 30).toFixed(0)} dias</strong> de operação. Recomendamos acumular mais caixa antes de realizar novos investimentos.</p>
+                    )}
                 </div>
             </div>
 
-            {/* Explanation & Config */}
-            <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 p-8 flex flex-col justify-center">
+            {/* Metrics & Explanation Side */}
+            <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 p-8 flex flex-col">
                 <div className="mb-6">
-                    <h3 className="font-bold text-lg text-slate-800 dark:text-white mb-2">Entenda o Cálculo</h3>
-                    <p className="text-slate-500 dark:text-slate-400 text-sm leading-relaxed">
-                        O sistema soma todos os seus <strong>Custos Fixos</strong> cadastrados e calcula <strong>{wcPercentage}%</strong> desse valor para definir sua meta de Capital de Giro. 
-                        Isso garante que você sempre tenha reserva para cobrir suas obrigações essenciais.
-                    </p>
-                </div>
-
-                <div className="p-4 rounded-xl border border-slate-100 dark:border-slate-700/50 bg-slate-50 dark:bg-slate-900/50">
-                    <span className="text-xs font-bold text-slate-400 uppercase">Base de Cálculo Atual</span>
-                    <div className="flex justify-between items-end mt-2">
-                        <div>
-                            <p className="text-sm text-slate-500">Total Custos Fixos</p>
-                            <p className="text-xl font-black text-slate-800 dark:text-white">{isVisible ? `R$ ${totalFixedCosts.toLocaleString()}` : '••••'}</p>
+                    <h3 className="font-bold text-lg text-slate-800 dark:text-white mb-2">Base de Cálculo</h3>
+                    <div className="p-4 rounded-xl border border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/30 mt-4">
+                        <div className="flex justify-between items-center mb-1">
+                            <span className="text-xs font-bold text-slate-400 uppercase">Custos Fixos Mensais</span>
+                            <span className="text-xs bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300 px-2 py-0.5 rounded">Base</span>
                         </div>
-                        <div className="text-right">
-                            <span className="text-xs bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300 px-2 py-1 rounded">
-                                {wcPercentage}% Alocação
-                            </span>
-                        </div>
+                        <p className="text-2xl font-black text-slate-800 dark:text-white">{isVisible ? `R$ ${totalFixedCosts.toLocaleString()}` : '••••'}</p>
                     </div>
                 </div>
-                
-                <div className="mt-6 flex gap-3 p-4 bg-blue-50 dark:bg-blue-900/10 rounded-xl text-sm text-blue-800 dark:text-blue-300 border border-blue-100 dark:border-blue-800/30">
-                    <AlertCircle className="shrink-0" size={20} />
-                    <p>O cálculo é atualizado instantaneamente ao adicionar ou remover custos fixos.</p>
+
+                <div className="flex-1">
+                    <div className="flex justify-between items-center mb-2">
+                         <h4 className="text-sm font-bold text-slate-700 dark:text-slate-300">Meta de Cobertura</h4>
+                         <span className="text-xs font-bold text-blue-600 dark:text-blue-400">{reserveRatio}% ({Math.ceil(reserveRatio/100)} meses)</span>
+                    </div>
+                    
+                    {/* Visual representation of months covered */}
+                    <div className="flex gap-1 mb-4">
+                        {[1,2,3,4,5,6].map(m => (
+                            <div key={m} className={`h-2 flex-1 rounded-full ${m <= Math.ceil(reserveRatio/100) ? 'bg-blue-500' : 'bg-slate-100 dark:bg-slate-700'}`}></div>
+                        ))}
+                    </div>
+
+                    <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
+                        Sua meta de Capital de Giro é definida nas configurações da empresa. Atualmente configurada para cobrir <strong>{(reserveRatio/100).toFixed(1)}x</strong> seus custos fixos mensais.
+                    </p>
                 </div>
             </div>
         </div>

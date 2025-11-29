@@ -18,7 +18,6 @@ const ReportsView: React.FC<ReportsViewProps> = ({ transactions, isVisible, acco
   const currentYear = new Date().getFullYear();
 
   // STRICTLY Filter transactions for current accountType within the Reports logic
-  // App.tsx passes `transactions` which might be filtered, but we ensure safety here.
   const relevantTransactions = transactions.filter(t => t.accountId === accountType);
 
   // --- DRE Calculation (Current Month) ---
@@ -51,13 +50,11 @@ const ReportsView: React.FC<ReportsViewProps> = ({ transactions, isVisible, acco
 
   const dre = getCurrentMonthDRE();
 
-  // --- Project Profitability ---
+  // --- Project Revenue ---
   // Only show projects if Business Account
   const projectStats = accountType === 'business' ? projects.map(p => {
-      const profit = p.value - p.cost;
-      const margin = p.value > 0 ? (profit / p.value) * 100 : 0;
-      return { id: p.id, name: p.name, revenue: p.value, cost: p.cost, profit: profit, margin: margin };
-  }) : [];
+      return { id: p.id, name: p.name, revenue: p.value };
+  }).sort((a,b) => b.revenue - a.revenue) : [];
 
   // --- Export Functions ---
   const handleExportCSV = () => {
@@ -137,35 +134,22 @@ const ReportsView: React.FC<ReportsViewProps> = ({ transactions, isVisible, acco
                 <div className="bg-white dark:bg-slate-800 p-6 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 break-inside-avoid">
                     <h3 className="text-lg font-bold text-slate-800 dark:text-white flex items-center gap-2 mb-6">
                         <Briefcase size={20} className="text-purple-500" />
-                        Rentabilidade por Projeto
+                        Faturamento por Projeto
                     </h3>
                     
                     {projectStats.length > 0 ? (
                         <div className="space-y-4 max-h-[400px] overflow-y-auto custom-scrollbar pr-2">
-                            {projectStats.map((proj) => (
-                                <div key={proj.id} className="bg-slate-50 dark:bg-slate-900/40 p-4 rounded-xl border border-slate-100 dark:border-slate-700/50">
-                                    <div className="flex justify-between items-start mb-2">
+                            {projectStats.map((proj, idx) => (
+                                <div key={proj.id} className="bg-slate-50 dark:bg-slate-900/40 p-4 rounded-xl border border-slate-100 dark:border-slate-700/50 flex items-center justify-between">
+                                    <div className="flex items-center gap-3">
+                                        <div className="w-8 h-8 rounded-full bg-slate-200 dark:bg-slate-700 flex items-center justify-center font-bold text-slate-500 text-xs">
+                                            #{idx + 1}
+                                        </div>
                                         <span className="font-bold text-slate-700 dark:text-slate-200">{proj.name}</span>
-                                        <span className={`text-xs font-bold px-2 py-0.5 rounded ${proj.margin > 50 ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'}`}>
-                                            {proj.margin.toFixed(0)}% Margem
-                                        </span>
                                     </div>
-                                    <div className="grid grid-cols-3 gap-2 text-sm">
-                                        <div>
-                                            <p className="text-[10px] text-slate-400 uppercase">Receita</p>
-                                            <p className="font-bold text-emerald-600">{isVisible ? `R$ ${proj.revenue.toLocaleString()}` : '••'}</p>
-                                        </div>
-                                        <div>
-                                            <p className="text-[10px] text-slate-400 uppercase">Custos Int.</p>
-                                            <p className="font-bold text-red-500">{isVisible ? `R$ ${proj.cost.toLocaleString()}` : '••'}</p>
-                                        </div>
-                                        <div className="text-right">
-                                            <p className="text-[10px] text-slate-400 uppercase">Lucro Real</p>
-                                            <p className="font-bold text-blue-600">{isVisible ? `R$ ${proj.profit.toLocaleString()}` : '••'}</p>
-                                        </div>
-                                    </div>
-                                    <div className="w-full bg-slate-200 dark:bg-slate-700 h-1.5 rounded-full mt-3 overflow-hidden">
-                                        <div className="bg-emerald-500 h-full rounded-full" style={{width: `${Math.min(proj.margin, 100)}%`}}></div>
+                                    <div className="text-right">
+                                        <p className="text-[10px] text-slate-400 uppercase">Receita Total</p>
+                                        <p className="font-bold text-emerald-600 text-lg">{isVisible ? `R$ ${proj.revenue.toLocaleString()}` : '••'}</p>
                                     </div>
                                 </div>
                             ))}

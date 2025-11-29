@@ -16,7 +16,7 @@ const sanitizePayload = (payload: any) => {
     }
 
     // Se for número vazio ou indefinido, vira 0
-    if ((key === 'amount' || key === 'value' || key === 'cost') && (value === '' || value === undefined)) {
+    if ((key === 'amount' || key === 'value') && (value === '' || value === undefined)) {
       value = 0;
     }
 
@@ -230,7 +230,7 @@ export const projectService = {
       startDate: new Date(p.start_date),
       deadline: p.deadline ? new Date(p.deadline) : undefined,
       value: Number(p.value),
-      cost: Number(p.cost)
+      // Cost removed
     })) as Project[];
   },
 
@@ -240,7 +240,7 @@ export const projectService = {
       name: project.name,
       client_id: project.clientId || null,
       value: project.value,
-      cost: project.cost,
+      // Cost removed from payload
       description: project.description,
       start_date: project.startDate.toISOString(),
       deadline: project.deadline?.toISOString() || null
@@ -255,7 +255,6 @@ export const projectService = {
       startDate: new Date(data.start_date),
       deadline: data.deadline ? new Date(data.deadline) : undefined,
       value: Number(data.value),
-      cost: Number(data.cost)
     } as Project;
   },
 
@@ -263,7 +262,7 @@ export const projectService = {
     const rawPayload: any = {
       name: project.name,
       value: project.value,
-      cost: project.cost,
+      // Cost removed from update payload
       description: project.description,
       start_date: project.startDate?.toISOString(),
       deadline: project.deadline?.toISOString() || null
@@ -284,7 +283,6 @@ export const projectService = {
       startDate: new Date(data.start_date),
       deadline: data.deadline ? new Date(data.deadline) : undefined,
       value: Number(data.value),
-      cost: Number(data.cost)
     } as Project;
   },
 

@@ -2,7 +2,7 @@
 import React, { useState } from 'react';
 import { Project, Client, Transaction } from '../types';
 import { 
-  Users, FolderKanban, Plus, Trash2, Edit2, Phone, Mail, FileText, Calendar, Wallet, TrendingUp 
+  Users, FolderKanban, Plus, Trash2, Edit2, Phone, Mail, FileText, Calendar, Wallet, BarChart3
 } from 'lucide-react';
 
 interface ProjectsViewProps {
@@ -16,7 +16,6 @@ interface ProjectsViewProps {
   onCreateClient: (c: Omit<Client, 'id'>) => Promise<void>;
   onUpdateClient: (id: string, c: Partial<Client>) => Promise<void>;
 
-  // Removed direct tx registration to avoid duplication
   onDeleteProject: (id: string) => void;
   onDeleteClient: (id: string) => void;
   isVisible: boolean;
@@ -43,7 +42,7 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
 
   const [isProjectModalOpen, setIsProjectModalOpen] = useState(false);
   const [projectForm, setProjectForm] = useState({ 
-    name: '', clientId: '', value: '', cost: '', description: '', startDate: '', deadline: '' 
+    name: '', clientId: '', value: '', description: '', startDate: '', deadline: '' 
   });
   const [editingProject, setEditingProject] = useState<Project | null>(null);
 
@@ -79,7 +78,6 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
         name: project.name, 
         clientId: project.clientId, 
         value: project.value.toString(), 
-        cost: project.cost.toString(), 
         description: project.description || '',
         startDate: dateString,
         deadline: deadlineString
@@ -87,7 +85,7 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
     } else {
       setEditingProject(null);
       setProjectForm({ 
-        name: '', clientId: '', value: '', cost: '', description: '', startDate: new Date().toLocaleDateString('en-CA'), deadline: ''
+        name: '', clientId: '', value: '', description: '', startDate: new Date().toLocaleDateString('en-CA'), deadline: ''
       });
     }
     setIsProjectModalOpen(true);
@@ -97,7 +95,6 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
     if (!projectForm.name || !projectForm.clientId) return;
     
     const projectVal = parseFloat(projectForm.value) || 0;
-    const projectCost = parseFloat(projectForm.cost) || 0;
     
     const [year, month, day] = projectForm.startDate.split('-').map(Number);
     const paymentDate = new Date(year, month - 1, day, 12, 0, 0); 
@@ -112,7 +109,6 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
         name: projectForm.name,
         clientId: projectForm.clientId,
         value: projectVal,
-        cost: projectCost,
         description: projectForm.description,
         startDate: paymentDate,
         deadline: deadlineDate
@@ -122,7 +118,6 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
         await onUpdateProject(editingProject.id, projectData);
     } else {
         await onCreateProject(projectData);
-        // Note: Transaction creation is now handled automatically in App.tsx
     }
     setIsProjectModalOpen(false);
   };
@@ -161,7 +156,6 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
       {activeTab === 'projects' && (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
             {projects.map(project => {
-                const profit = project.value - project.cost;
                 return (
                     <div key={project.id} className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 p-0 overflow-hidden group hover:shadow-xl hover:translate-y-[-2px] transition-all duration-300">
                         <div className="p-5 border-b border-slate-100 dark:border-slate-700/50 bg-slate-50/50 dark:bg-slate-800/50">
@@ -183,43 +177,25 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
                         </div>
 
                         <div className="p-5">
-                            <div className="flex items-center justify-between mb-6">
-                                <div>
-                                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Receita</p>
-                                    <div className="text-xl font-bold text-slate-800 dark:text-white flex items-center gap-1">
+                            <div className="flex items-center justify-between mb-4">
+                                <div className="flex flex-col">
+                                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Valor do Contrato</p>
+                                    <div className="text-2xl font-black text-emerald-600 dark:text-emerald-400 flex items-center gap-2">
+                                        <Wallet size={20} className="text-emerald-500/50" />
                                         {isVisible ? `R$ ${project.value.toLocaleString('pt-BR', { compactDisplay: 'short', notation: 'compact' })}` : '••••'}
                                     </div>
                                 </div>
-                                <div className="text-right">
-                                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Início</p>
-                                    <div className="text-xs font-bold text-slate-600 dark:text-slate-300 flex items-center gap-1 justify-end bg-slate-100 dark:bg-slate-700 px-2 py-1 rounded-md">
-                                        <Calendar size={12} /> {project.startDate.toLocaleDateString('pt-BR')}
-                                    </div>
-                                    {project.deadline && (
-                                        <div className="text-xs font-bold text-red-500 flex items-center gap-1 justify-end mt-1">
-                                            <span className="text-[9px] uppercase">Prazo:</span> {project.deadline.toLocaleDateString('pt-BR')}
-                                        </div>
-                                    )}
-                                </div>
                             </div>
-
-                            <div className="grid grid-cols-2 gap-3">
-                                <div className="bg-red-50 dark:bg-red-900/10 p-3 rounded-xl border border-red-100 dark:border-red-900/20">
-                                    <span className="text-[10px] text-red-500 uppercase font-bold flex items-center gap-1 mb-1">
-                                        <Wallet size={10} /> Custos
-                                    </span>
-                                    <div className="text-red-600 font-bold text-sm">
-                                        {isVisible ? `R$ ${project.cost.toLocaleString()}` : '••••'}
-                                    </div>
+                            
+                            <div className="flex items-center justify-between pt-4 border-t border-slate-100 dark:border-slate-700/50">
+                                <div className="text-xs font-bold text-slate-600 dark:text-slate-300 flex items-center gap-1 bg-slate-100 dark:bg-slate-700/50 px-2 py-1.5 rounded-md">
+                                    <Calendar size={12} /> {project.startDate.toLocaleDateString('pt-BR')}
                                 </div>
-                                <div className="bg-emerald-50 dark:bg-emerald-900/10 p-3 rounded-xl border border-emerald-100 dark:border-emerald-900/20">
-                                    <span className="text-[10px] text-emerald-500 uppercase font-bold flex items-center gap-1 mb-1">
-                                        <TrendingUp size={10} /> Lucro
-                                    </span>
-                                    <div className="text-emerald-600 font-bold text-sm">
-                                        {isVisible ? `R$ ${profit.toLocaleString()}` : '••••'}
+                                {project.deadline && (
+                                    <div className="text-xs font-bold text-red-500 flex items-center gap-1 bg-red-50 dark:bg-red-900/20 px-2 py-1.5 rounded-md border border-red-100 dark:border-red-900/30">
+                                        Prazo: {project.deadline.toLocaleDateString('pt-BR')}
                                     </div>
-                                </div>
+                                )}
                             </div>
                         </div>
                     </div>
@@ -321,20 +297,11 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
                        </select>
                    </div>
                    
-                   <div className="grid grid-cols-2 gap-4">
-                        <div>
-                            <label className="text-xs font-bold text-slate-500 uppercase mb-1 block">Valor Total (Receita)</label>
-                            <div className="relative">
-                                <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 font-bold">R$</span>
-                                <input type="number" value={projectForm.value} onChange={e => setProjectForm({...projectForm, value: e.target.value})} className="w-full p-3.5 pl-10 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 outline-none focus:ring-2 focus:ring-emerald-500 text-slate-800 dark:text-white font-bold" placeholder="0.00" />
-                            </div>
-                        </div>
-                        <div>
-                            <label className="text-xs font-bold text-slate-500 uppercase mb-1 block">Custos Internos</label>
-                            <div className="relative">
-                                <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 font-bold">R$</span>
-                                <input type="number" value={projectForm.cost} onChange={e => setProjectForm({...projectForm, cost: e.target.value})} className="w-full p-3.5 pl-10 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 outline-none focus:ring-2 focus:ring-red-500 text-slate-800 dark:text-white font-bold" placeholder="0.00" />
-                            </div>
+                   <div>
+                        <label className="text-xs font-bold text-slate-500 uppercase mb-1 block">Valor Total (Receita)</label>
+                        <div className="relative">
+                            <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 font-bold">R$</span>
+                            <input type="number" value={projectForm.value} onChange={e => setProjectForm({...projectForm, value: e.target.value})} className="w-full p-3.5 pl-10 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 outline-none focus:ring-2 focus:ring-emerald-500 text-slate-800 dark:text-white font-bold" placeholder="0.00" />
                         </div>
                    </div>
 
