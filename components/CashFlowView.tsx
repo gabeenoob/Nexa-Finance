@@ -1,14 +1,14 @@
-
 import React from 'react';
 import { AppSettings, Transaction, AccountType, BusinessConfig, FixedCostTemplate } from '../types';
-import { Target, AlertCircle, PieChart, Info, Wallet, TrendingUp, TrendingDown, ArrowRight, ShieldCheck, Hourglass } from 'lucide-react';
+import { Target, AlertCircle, PieChart, Info, Wallet, TrendingUp, TrendingDown, ArrowRight, ShieldCheck, Hourglass, Zap } from 'lucide-react';
+import { ResponsiveContainer, PieChart as RechartsPie, Pie, Cell, Tooltip } from 'recharts';
 
 interface CashFlowViewProps {
   settings: AppSettings;
   onUpdateSettings: (s: AppSettings) => void;
   transactions: Transaction[];
   businessConfig: BusinessConfig; 
-  fixedCosts: FixedCostTemplate[]; // Added direct prop for reactivity
+  fixedCosts: FixedCostTemplate[]; 
   accountType: AccountType;
   isVisible: boolean;
 }
@@ -20,7 +20,6 @@ const CashFlowView: React.FC<CashFlowViewProps> = ({ settings, transactions, fix
 
   // --- Real-time Calculations ---
   
-  // 1. Calculate Real Cash Balance (Sum of all business transactions)
   const calculateRealBalance = () => {
       return transactions
         .filter(t => t.accountId === 'business')
@@ -28,169 +27,215 @@ const CashFlowView: React.FC<CashFlowViewProps> = ({ settings, transactions, fix
   };
 
   const realTotalBalance = calculateRealBalance();
-  
-  // 2. Total Fixed Costs (Monthly Base)
   const totalFixedCosts = fixedCosts.reduce((acc, curr) => acc + curr.defaultAmount, 0);
   
-  // 3. AUTOMATIC Working Capital Calculation (Calculation Redesign)
-  // New Logic: User sets a percentage of fixed costs they want to keep as reserve.
-  // 100% = 1 month of coverage. 600% = 6 months.
   const reserveRatio = currentScope.cashFlow.workingCapitalPercent || 100; // Default to 1 month (100%)
   const requiredReserve = totalFixedCosts * (reserveRatio / 100);
 
-  // 4. Free Cash Calculation
   const freeCash = realTotalBalance - requiredReserve;
-
-  // 5. Runway Calculation (Months of Survival)
   const runwayMonths = totalFixedCosts > 0 ? (realTotalBalance / totalFixedCosts) : 0;
 
-  // Progress Bar Widths
-  const reserveProgress = realTotalBalance > 0 ? Math.min((requiredReserve / realTotalBalance) * 100, 100) : 0;
-  const freeProgress = realTotalBalance > 0 ? Math.max(0, 100 - reserveProgress) : 0;
+  // --- Gauge Data ---
+  // Using a semi-circle chart to represent coverage
+  // Total Value = Required Reserve. 
+  // If RealBalance > Required, we are at 100%.
+  
+  const coveragePercent = Math.min(Math.max((realTotalBalance / requiredReserve) * 100, 0), 100);
+  const isHealthy = freeCash >= 0;
+
+  // Custom Gauge Component using SVG for maximum minimalism
+  const GaugeChart = () => {
+    const radius = 80;
+    const stroke = 12;
+    const normalizedRadius = radius - stroke * 2;
+    const circumference = normalizedRadius * 2 * Math.PI;
+    const strokeDashoffset = circumference - (coveragePercent / 100) * (circumference / 2); // Divide by 2 for semi-circle effect logic adjustment (custom mapping)
+    
+    // For a simple semi-circle gauge 
+    // Arc length = PI * R. 
+    // Max offset (empty) = PI * R
+    // Min offset (full) = 0
+    
+    const arcLength = Math.PI * normalizedRadius;
+    const progressOffset = arcLength - ((coveragePercent / 100) * arcLength);
+
+    return (
+        <div className="relative flex items-center justify-center h-[200px]">
+            <svg height={radius * 2} width={radius * 2} className="rotate-[180deg]">
+                 {/* Background Arc */}
+                <circle
+                    stroke="currentColor"
+                    strokeWidth={stroke}
+                    strokeDasharray={`${arcLength} ${arcLength}`}
+                    strokeDashoffset="0"
+                    fill="transparent"
+                    r={normalizedRadius}
+                    cx={radius}
+                    cy={radius}
+                    className="text-slate-100 dark:text-slate-700 transition-all duration-1000"
+                    strokeLinecap="round"
+                />
+                {/* Progress Arc */}
+                <circle
+                    stroke="currentColor"
+                    strokeWidth={stroke}
+                    strokeDasharray={`${arcLength} ${arcLength}`}
+                    strokeDashoffset={progressOffset}
+                    fill="transparent"
+                    r={normalizedRadius}
+                    cx={radius}
+                    cy={radius}
+                    className={`${isHealthy ? 'text-emerald-500' : 'text-amber-500'} transition-all duration-1000 ease-out`}
+                    strokeLinecap="round"
+                />
+            </svg>
+            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/3 text-center rotate-180 transform-gpu">
+                <span className={`text-4xl font-black ${isHealthy ? 'text-emerald-500' : 'text-amber-500'}`}>
+                    {Math.round(coveragePercent)}%
+                </span>
+                <p className="text-xs text-slate-400 font-bold uppercase mt-1 tracking-wider">Cobertura</p>
+            </div>
+        </div>
+    );
+  };
 
   return (
-    <div className="space-y-8 animate-in fade-in duration-500">
+    <div className="space-y-8 animate-fade-up">
         
         {/* Header Section */}
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 stagger-1 animate-fade-in">
             <div>
-                <h1 className="text-2xl font-bold text-slate-800 dark:text-white flex items-center gap-2">
-                    <PieChart className="text-blue-600" /> Gestão de Capital de Giro
+                <h1 className="text-3xl font-black text-slate-900 dark:text-white flex items-center gap-3">
+                    <div className="p-2 bg-blue-600 rounded-xl text-white shadow-lg shadow-blue-600/30">
+                        <Zap size={24} fill="currentColor" /> 
+                    </div>
+                    Capital de Giro & Runway
                 </h1>
-                <p className="text-slate-500 text-sm mt-1">
-                    Análise de sustentabilidade financeira baseada nos seus custos fixos.
+                <p className="text-slate-500 dark:text-slate-400 text-sm mt-2 font-medium">
+                    Análise de saúde financeira e capacidade de sobrevivência sem novas receitas.
                 </p>
             </div>
-            {/* Status Badge */}
-            <div className={`flex items-center gap-2 px-4 py-2 rounded-full border text-sm font-bold w-fit ${freeCash >= 0 ? 'bg-emerald-50 text-emerald-600 border-emerald-200 dark:bg-emerald-900/20 dark:border-emerald-800' : 'bg-amber-50 text-amber-600 border-amber-200 dark:bg-amber-900/20 dark:border-amber-800'}`}>
-                {freeCash >= 0 ? <ShieldCheck size={18} /> : <AlertCircle size={18} />}
-                {freeCash >= 0 ? 'Reserva Garantida' : 'Abaixo da Reserva Ideal'}
+            
+            <div className={`flex items-center gap-3 px-5 py-3 rounded-2xl border backdrop-blur-md transition-all ${isHealthy ? 'bg-emerald-50/50 border-emerald-200 dark:bg-emerald-900/10 dark:border-emerald-500/30 text-emerald-700 dark:text-emerald-400' : 'bg-amber-50/50 border-amber-200 dark:bg-amber-900/10 dark:border-amber-500/30 text-amber-700 dark:text-amber-400'}`}>
+                {isHealthy ? <ShieldCheck size={24} /> : <AlertCircle size={24} />}
+                <div className="flex flex-col">
+                    <span className="text-xs font-bold uppercase opacity-70">Status Atual</span>
+                    <span className="font-bold text-sm">{isHealthy ? 'Reserva Garantida' : 'Abaixo do Ideal'}</span>
+                </div>
             </div>
         </div>
 
-        {/* Hero Card: Real Balance with Glassmorphism */}
-        <div className="relative overflow-hidden bg-gradient-to-br from-slate-900 to-slate-800 dark:from-white/10 dark:to-white/5 dark:backdrop-blur-xl dark:border dark:border-white/10 rounded-3xl p-8 shadow-xl shadow-slate-900/20 dark:shadow-black/20 text-white flex flex-col md:flex-row items-center justify-between gap-8 group">
-            {/* Decorative Elements */}
-            <div className="absolute top-0 right-0 w-64 h-64 bg-blue-500/20 rounded-full -mr-16 -mt-16 blur-3xl pointer-events-none"></div>
-            <div className="absolute bottom-0 left-0 w-48 h-48 bg-emerald-500/10 rounded-full -ml-10 -mb-10 blur-3xl pointer-events-none"></div>
+        {/* Hero Grid */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 stagger-2 animate-fade-up">
             
-            <div className="relative z-10 text-center md:text-left flex-1">
-                <p className="text-sm font-bold uppercase tracking-widest opacity-60 mb-2 flex items-center gap-2 md:justify-start justify-center">
-                    <Wallet size={16} /> Saldo Real Disponível
-                </p>
-                <div className="text-5xl md:text-6xl font-black tracking-tight flex items-baseline justify-center md:justify-start gap-1 drop-shadow-sm">
-                    {isVisible ? (
-                        <>
-                            <span className="text-2xl md:text-3xl opacity-50">R$</span>
-                            {realTotalBalance.toLocaleString('pt-BR', {minimumFractionDigits: 2})}
-                        </>
-                    ) : '••••••••'}
-                </div>
-                <div className="mt-4 inline-flex items-center gap-2 px-3 py-1.5 bg-white/10 rounded-lg text-xs font-bold border border-white/10">
-                    <Hourglass size={14} className="text-blue-300" />
-                    <span>Fôlego Financeiro (Runway): <span className="text-white text-sm">{runwayMonths.toFixed(1)} meses</span></span>
-                </div>
-            </div>
-
-            {/* Mini breakdown cards inside hero */}
-            <div className="relative z-10 flex flex-col sm:flex-row gap-4 w-full md:w-auto">
-                 <div className="bg-slate-950/30 dark:bg-slate-900/40 backdrop-blur-md rounded-2xl p-5 flex-1 border border-white/5 min-w-[220px]">
-                     <div className="flex items-center gap-2 mb-2">
-                        <div className="w-2 h-2 rounded-full bg-amber-400 box-shadow-glow"></div>
-                        <p className="text-xs font-bold uppercase opacity-80">Reserva Necessária</p>
-                     </div>
-                     <p className="text-2xl font-bold text-amber-300">{isVisible ? `R$ ${requiredReserve.toLocaleString('pt-BR', {compactDisplay: 'short'})}` : '••••'}</p>
-                     <p className="text-[10px] opacity-60 mt-1">{reserveRatio}% dos Custos Fixos</p>
-                 </div>
-                 
-                 <div className="bg-slate-950/30 dark:bg-slate-900/40 backdrop-blur-md rounded-2xl p-5 flex-1 border border-white/5 min-w-[220px]">
-                     <div className="flex items-center gap-2 mb-2">
-                        <div className={`w-2 h-2 rounded-full ${freeCash >= 0 ? 'bg-emerald-400' : 'bg-red-400'}`}></div>
-                        <p className="text-xs font-bold uppercase opacity-80">Caixa Livre</p>
-                     </div>
-                     <p className={`text-2xl font-bold ${freeCash >= 0 ? 'text-emerald-300' : 'text-red-300'}`}>{isVisible ? `R$ ${freeCash.toLocaleString('pt-BR', {compactDisplay: 'short'})}` : '••••'}</p>
-                     <p className="text-[10px] opacity-60 mt-1">Disponível para Investir/Retirar</p>
-                 </div>
-            </div>
-        </div>
-
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-            
-            {/* Visual Bar Chart Section */}
-            <div className="lg:col-span-2 bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 p-8 flex flex-col justify-center">
-                <h3 className="font-bold text-lg text-slate-800 dark:text-white mb-8 flex items-center gap-2">
-                    <Target className="text-blue-500" size={20}/> Composição do Saldo
+            {/* Main Gauge Card */}
+            <div className="glass-card rounded-3xl p-8 flex flex-col items-center justify-center relative overflow-hidden group">
+                <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-blue-500 to-transparent opacity-20"></div>
+                
+                <h3 className="font-bold text-lg text-slate-700 dark:text-white mb-6 flex items-center gap-2 z-10">
+                    <Target size={18} className="text-blue-500"/> Meta de Reserva
                 </h3>
 
-                {/* Modern Progress Bar */}
-                <div className="relative mb-4">
-                    <div className="h-16 w-full bg-slate-100 dark:bg-slate-900/50 rounded-2xl overflow-hidden flex shadow-inner relative">
-                        {/* Reserve Bar */}
-                        <div 
-                            className="h-full bg-gradient-to-r from-amber-400 to-amber-500 flex items-center justify-center text-[10px] font-bold text-amber-950 transition-all duration-1000 relative group border-r border-white/20"
-                            style={{ width: `${reserveProgress}%` }}
-                        >
-                            <span className="opacity-80 group-hover:opacity-100 transition-opacity">RESERVA</span>
-                        </div>
-                        
-                        {/* Free Cash Bar */}
-                        <div 
-                            className={`h-full flex items-center justify-center text-[10px] font-bold transition-all duration-1000 relative group ${freeCash >= 0 ? 'bg-gradient-to-r from-emerald-400 to-emerald-500 text-emerald-950' : 'bg-transparent'}`}
-                            style={{ width: `${freeProgress}%` }}
-                        >
-                            {freeCash >= 0 && <span className="opacity-80 group-hover:opacity-100 transition-opacity">LIVRE</span>}
-                        </div>
-                    </div>
+                <GaugeChart />
 
-                    {/* Indicators below bar */}
-                    <div className="flex justify-between mt-3 text-xs font-bold text-slate-400 px-1">
-                        <span>0%</span>
-                        <span>50%</span>
-                        <span>100% Saldo</span>
-                    </div>
-                </div>
-
-                <div className="mt-4 p-4 rounded-xl bg-slate-50 dark:bg-slate-900/50 border border-slate-100 dark:border-slate-700/50 text-sm text-slate-600 dark:text-slate-400">
-                    {freeCash >= 0 ? (
-                        <p>Você atingiu sua meta de reserva! <strong className="text-emerald-600 dark:text-emerald-400">R$ {isVisible ? freeCash.toLocaleString() : '...'}</strong> estão livres para reinvestimento ou distribuição de lucros sem comprometer a segurança da empresa.</p>
-                    ) : (
-                        <p>Seu saldo atual cobre apenas <strong className="text-amber-600 dark:text-amber-400">{(runwayMonths * 30).toFixed(0)} dias</strong> de operação. Recomendamos acumular mais caixa antes de realizar novos investimentos.</p>
-                    )}
-                </div>
-            </div>
-
-            {/* Metrics & Explanation Side */}
-            <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 p-8 flex flex-col">
-                <div className="mb-6">
-                    <h3 className="font-bold text-lg text-slate-800 dark:text-white mb-2">Base de Cálculo</h3>
-                    <div className="p-4 rounded-xl border border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/30 mt-4">
-                        <div className="flex justify-between items-center mb-1">
-                            <span className="text-xs font-bold text-slate-400 uppercase">Custos Fixos Mensais</span>
-                            <span className="text-xs bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300 px-2 py-0.5 rounded">Base</span>
-                        </div>
-                        <p className="text-2xl font-black text-slate-800 dark:text-white">{isVisible ? `R$ ${totalFixedCosts.toLocaleString()}` : '••••'}</p>
-                    </div>
-                </div>
-
-                <div className="flex-1">
-                    <div className="flex justify-between items-center mb-2">
-                         <h4 className="text-sm font-bold text-slate-700 dark:text-slate-300">Meta de Cobertura</h4>
-                         <span className="text-xs font-bold text-blue-600 dark:text-blue-400">{reserveRatio}% ({Math.ceil(reserveRatio/100)} meses)</span>
-                    </div>
-                    
-                    {/* Visual representation of months covered */}
-                    <div className="flex gap-1 mb-4">
-                        {[1,2,3,4,5,6].map(m => (
-                            <div key={m} className={`h-2 flex-1 rounded-full ${m <= Math.ceil(reserveRatio/100) ? 'bg-blue-500' : 'bg-slate-100 dark:bg-slate-700'}`}></div>
-                        ))}
-                    </div>
-
-                    <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
-                        Sua meta de Capital de Giro é definida nas configurações da empresa. Atualmente configurada para cobrir <strong>{(reserveRatio/100).toFixed(1)}x</strong> seus custos fixos mensais.
+                <div className="mt-[-40px] text-center z-10">
+                    <p className="text-sm text-slate-500 dark:text-slate-400 font-medium">
+                        Meta: <span className="text-slate-800 dark:text-white font-bold">{reserveRatio}%</span> dos Custos Fixos
                     </p>
                 </div>
             </div>
+
+            {/* Metrics Breakdown */}
+            <div className="lg:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-6">
+                
+                {/* Required Reserve Card */}
+                <div className="glass-card rounded-3xl p-6 flex flex-col justify-between hover:scale-[1.01] transition-transform duration-300">
+                    <div className="flex justify-between items-start">
+                        <div className="p-3 bg-amber-100 dark:bg-amber-900/20 text-amber-600 dark:text-amber-400 rounded-2xl">
+                             <Wallet size={24} />
+                        </div>
+                        <div className="text-right">
+                             <p className="text-xs font-bold uppercase text-slate-400 tracking-wider">Necessário (Reserva)</p>
+                             <h4 className="text-2xl font-black text-slate-800 dark:text-white mt-1">
+                                {isVisible ? `R$ ${requiredReserve.toLocaleString('pt-BR', {compactDisplay: 'short'})}` : '••••'}
+                             </h4>
+                        </div>
+                    </div>
+                    <div className="mt-8">
+                        <div className="w-full bg-slate-100 dark:bg-slate-700 h-2 rounded-full overflow-hidden">
+                            <div className="h-full bg-amber-500 rounded-full transition-all duration-1000" style={{width: '100%'}}></div>
+                        </div>
+                        <p className="text-xs text-slate-500 mt-2">Valor bloqueado para segurança operacional.</p>
+                    </div>
+                </div>
+
+                {/* Free Cash Card */}
+                <div className="glass-card rounded-3xl p-6 flex flex-col justify-between hover:scale-[1.01] transition-transform duration-300 border-l-4 border-l-emerald-500">
+                    <div className="flex justify-between items-start">
+                        <div className={`p-3 rounded-2xl ${isHealthy ? 'bg-emerald-100 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400' : 'bg-red-100 dark:bg-red-900/20 text-red-500'}`}>
+                             <TrendingUp size={24} />
+                        </div>
+                        <div className="text-right">
+                             <p className="text-xs font-bold uppercase text-slate-400 tracking-wider">Caixa Livre (Investimento)</p>
+                             <h4 className={`text-2xl font-black mt-1 ${isHealthy ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-500'}`}>
+                                {isVisible ? `R$ ${freeCash.toLocaleString('pt-BR', {compactDisplay: 'short'})}` : '••••'}
+                             </h4>
+                        </div>
+                    </div>
+                    <div className="mt-8">
+                         {isHealthy ? (
+                             <div className="flex items-center gap-2 text-xs font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/20 px-3 py-1.5 rounded-lg w-fit">
+                                <Zap size={14} /> Pronto para crescer
+                             </div>
+                         ) : (
+                             <div className="flex items-center gap-2 text-xs font-bold text-red-500 bg-red-50 dark:bg-red-900/20 px-3 py-1.5 rounded-lg w-fit">
+                                <AlertCircle size={14} /> Déficit de Reserva
+                             </div>
+                         )}
+                        <p className="text-xs text-slate-500 mt-2">Capital disponível acima da meta.</p>
+                    </div>
+                </div>
+
+                {/* Runway Card (Full Width in Inner Grid) */}
+                <div className="md:col-span-2 glass-card rounded-3xl p-8 bg-slate-900 dark:bg-white text-white dark:text-slate-900 relative overflow-hidden">
+                    <div className="absolute top-0 right-0 w-64 h-64 bg-white/10 dark:bg-blue-500/10 rounded-full -mr-20 -mt-20 blur-3xl pointer-events-none"></div>
+                    
+                    <div className="relative z-10 flex flex-col md:flex-row items-center justify-between gap-6">
+                        <div className="flex items-center gap-4">
+                            <div className="p-4 bg-white/10 dark:bg-slate-200/50 rounded-2xl backdrop-blur-md">
+                                <Hourglass size={32} className="text-blue-300 dark:text-blue-600" />
+                            </div>
+                            <div>
+                                <h3 className="text-2xl font-black tracking-tight">Runway (Fôlego)</h3>
+                                <p className="text-slate-300 dark:text-slate-600 text-sm font-medium">Tempo de vida sem novas receitas</p>
+                            </div>
+                        </div>
+
+                        <div className="text-center md:text-right">
+                             <div className="text-5xl font-black tracking-tighter tabular-nums">
+                                {runwayMonths.toFixed(1)} <span className="text-lg font-bold text-slate-400 dark:text-slate-500">meses</span>
+                             </div>
+                             <p className="text-xs font-bold uppercase tracking-widest text-slate-400 dark:text-slate-500 mt-1">Baseado nos Custos Fixos</p>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
         </div>
+
+        {/* Informational Footer */}
+        <div className="p-6 rounded-3xl bg-slate-100 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-800 text-sm text-slate-600 dark:text-slate-400 leading-relaxed flex gap-4 items-start stagger-3 animate-fade-up">
+            <Info className="shrink-0 text-blue-500 mt-0.5" size={20} />
+            <div>
+                <p className="mb-2 font-bold text-slate-800 dark:text-white">Como funciona o cálculo?</p>
+                <p>
+                    O sistema utiliza seus <strong>Custos Fixos Mensais</strong> (R$ {isVisible ? totalFixedCosts.toLocaleString() : '...'}) como base.
+                    A meta de reserva é definida em <strong>{reserveRatio}%</strong> deste valor. 
+                    Todo capital acumulado que excede esta reserva é considerado <strong>Caixa Livre</strong> para distribuição de lucros ou reinvestimento seguro.
+                </p>
+            </div>
+        </div>
+
     </div>
   );
 };
