@@ -97,10 +97,16 @@ export const transactionService = {
     })) as Transaction[];
   },
 
-  // Busca específica para garantir sincronia
+  // Busca específica para garantir sincronia - USANDO maybeSingle para evitar erros 406
   async fetchByProjectId(projectId: string) {
     const { data, error } = await supabase.from('transactions').select('*').eq('project_id', projectId).maybeSingle();
-    if (error) return null; // Não lança erro, apenas retorna null se não achar
+    
+    // maybeSingle retorna null sem erro se não achar, mas retorna erro se tiver mais de um (o que não deve acontecer)
+    if (error) {
+        console.warn("Erro ao buscar transação por projeto:", error);
+        return null;
+    }
+    
     if (!data) return null;
 
     return {

@@ -137,7 +137,75 @@ const App: React.FC = () => {
     }
   };
 
-  // --- SYNC LOGIC: Transaction <-> Project ---
+  // --- CORE SYNC LOGIC ---
+
+  /**
+   * Helper: Ensures a Transaction reflects the Project data.
+   * Finds existing transaction by Project ID. If found, updates it. If not, creates it.
+   */
+  const syncProjectToTransaction = async (project: Project) => {
+      if (!user) return;
+      
+      const clientName = clients.find(c => c.id === project.clientId)?.name || 'Cliente';
+      const txPayload = {
+          description: `Projeto: ${project.name}`,
+          amount: Number(project.value),
+          date: new Date(project.startDate),
+          type: 'income' as const,
+          category: 'Projetos',
+          accountId: 'business' as AccountType,
+          tags: ['projeto'],
+          source: clientName,
+          projectId: project.id // Ensure link
+      };
+
+      // 1. Try to find existing transaction linked to this project
+      const existingTx = await transactionService.fetchByProjectId(project.id);
+
+      if (existingTx) {
+          // UPDATE
+          const updatedTx = await transactionService.update(existingTx.id, txPayload);
+          setTransactions(prev => prev.map(t => t.id === existingTx.id ? updatedTx : t));
+      } else {
+          // CREATE (Healing)
+          const newTx = await transactionService.create(user.id, txPayload);
+          setTransactions(prev => [...prev, newTx]);
+      }
+  };
+
+  /**
+   * Helper: Ensures a Project reflects the Transaction data.
+   * Only runs if the transaction is linked to a project.
+   */
+  const syncTransactionToProject = async (transaction: Transaction) => {
+      if (!transaction.projectId || !user) return;
+
+      const project = projects.find(p => p.id === transaction.projectId);
+      if (!project) return;
+
+      // Clean name
+      let cleanName = transaction.description;
+      if (cleanName.startsWith('Projeto: ')) {
+          cleanName = cleanName.replace('Projeto: ', '');
+      }
+
+      // Only update if values differ to save API calls
+      const isDiff = 
+        project.value !== transaction.amount || 
+        project.startDate.getTime() !== transaction.date.getTime() ||
+        project.name !== cleanName;
+
+      if (isDiff) {
+          const updatedProject = await projectService.update(project.id, {
+              value: transaction.amount,
+              startDate: transaction.date,
+              name: cleanName
+          });
+          setProjects(prev => prev.map(p => p.id === project.id ? updatedProject : p));
+      }
+  };
+
+  // --- HANDLERS ---
 
   const handleSaveTransaction = (txData: any, id?: string) => safeExecute(async () => {
     if (!user) return;
@@ -146,35 +214,22 @@ const App: React.FC = () => {
     let savedTx: Transaction;
 
     if (id) {
-      // --- UPDATE TRANSACTION ---
+      // UPDATE Transaction
+      // Check if original transaction had a projectId to preserve it if not passed
+      const original = transactions.find(t => t.id === id);
+      if (original?.projectId) {
+          payload.projectId = original.projectId;
+      }
+
       savedTx = await transactionService.update(id, payload);
       setTransactions(prev => prev.map(t => t.id === id ? savedTx : t));
-
-      // SYNC REVERSE: If Transaction is linked to a Project, update Project
+      
+      // TRIGGER REVERSE SYNC
       if (savedTx.projectId) {
-          const linkedProject = projects.find(p => p.id === savedTx.projectId);
-          if (linkedProject) {
-              // Extract pure name if formatted
-              let newName = savedTx.description;
-              if (newName.startsWith('Projeto: ')) newName = newName.replace('Projeto: ', '');
-
-              // Check if actual values changed to avoid loop
-              const amountChanged = Math.abs(linkedProject.value - savedTx.amount) > 0.01;
-              const dateChanged = linkedProject.startDate.getTime() !== savedTx.date.getTime();
-              const nameChanged = linkedProject.name !== newName;
-
-              if (amountChanged || dateChanged || nameChanged) {
-                  const updatedProj = await projectService.update(linkedProject.id, {
-                      value: savedTx.amount,
-                      startDate: savedTx.date,
-                      name: newName
-                  });
-                  setProjects(prev => prev.map(p => p.id === linkedProject.id ? updatedProj : p));
-              }
-          }
+          await syncTransactionToProject(savedTx);
       }
     } else {
-      // --- CREATE TRANSACTION ---
+      // CREATE Transaction
       savedTx = await transactionService.create(user.id, payload);
       setTransactions(prev => [...prev, savedTx]);
     }
@@ -189,22 +244,8 @@ const App: React.FC = () => {
     const createdProject = await projectService.create(user.id, projectData);
     setProjects(prev => [...prev, createdProject]);
 
-    // 2. Automatically Create Linked Transaction
-    const clientName = clients.find(c => c.id === projectData.clientId)?.name || 'Cliente';
-    const txPayload = {
-        description: `Projeto: ${createdProject.name}`,
-        amount: Number(createdProject.value),
-        date: new Date(createdProject.startDate),
-        type: 'income' as const,
-        category: 'Projetos',
-        accountId: 'business' as AccountType,
-        tags: ['projeto'],
-        projectId: createdProject.id, // IMPORTANT: Link IDs
-        source: clientName
-    };
-
-    const createdTx = await transactionService.create(user.id, txPayload);
-    setTransactions(prev => [...prev, createdTx]);
+    // 2. Sync to Transaction (Will create new since project is new)
+    await syncProjectToTransaction(createdProject);
 
     return createdProject;
   });
@@ -212,59 +253,15 @@ const App: React.FC = () => {
   const handleUpdateProject = (id: string, projectData: any) => safeExecute(async () => {
     if(!user) return;
     
-    // 1. Update the Project
+    // 1. Update Project
     const updatedProject = await projectService.update(id, projectData);
     setProjects(prev => prev.map(proj => proj.id === id ? updatedProject : proj));
 
-    // 2. Find Linked Transaction (Locally OR via API to be safe)
-    let linkedTx = transactions.find(t => t.projectId === id);
-    
-    // If not found locally, try to fetch it to ensure we don't duplicate or fail
-    if (!linkedTx) {
-       const found = await transactionService.fetchByProjectId(id);
-       if (found) linkedTx = found;
-    }
-    
-    if (linkedTx) {
-      // 3. Update the existing transaction
-      const newDescription = `Projeto: ${updatedProject.name}`;
-      const newAmount = Number(updatedProject.value);
-      const newDate = new Date(updatedProject.startDate);
-
-      const updatedTx = await transactionService.update(linkedTx.id, {
-        description: newDescription,
-        amount: newAmount,
-        date: newDate
-      });
-      
-      // Update local state (whether it was there before or we just fetched it)
-      setTransactions(prev => {
-        const exists = prev.some(t => t.id === updatedTx.id);
-        if (exists) {
-           return prev.map(t => t.id === updatedTx.id ? updatedTx : t);
-        } else {
-           return [...prev, updatedTx];
-        }
-      });
-    } else {
-        // 4. Healing: If for some reason it doesn't exist at all, recreate it.
-        // This handles cases where user might have deleted the transaction manually but kept the project.
-        const clientName = clients.find(c => c.id === updatedProject.clientId)?.name || 'Cliente';
-        const txPayload = {
-            description: `Projeto: ${updatedProject.name}`,
-            amount: Number(updatedProject.value),
-            date: new Date(updatedProject.startDate),
-            type: 'income' as const,
-            category: 'Projetos',
-            accountId: 'business' as AccountType,
-            tags: ['projeto', 'restaurado'],
-            projectId: updatedProject.id,
-            source: clientName
-        };
-        const restoredTx = await transactionService.create(user.id, txPayload);
-        setTransactions(prev => [...prev, restoredTx]);
-    }
+    // 2. Sync to Transaction (Will update existing or create if missing)
+    await syncProjectToTransaction(updatedProject);
   });
+
+  // --- OTHER HANDLERS (Clients, Tags, etc) ---
 
   const handleCreateClient = (c: any) => safeExecute(async () => {
     if(!user) return;
@@ -307,7 +304,7 @@ const App: React.FC = () => {
   });
 
   const requestDelete = (id: string, type: 'transaction' | 'project' | 'client' | 'cost') => {
-      // If deleting a transaction that is a project, confirm project deletion instead
+      // Intelligence: If deleting a transaction that IS a project, switch context to 'project'
       if (type === 'transaction') {
           const tx = transactions.find(t => t.id === id);
           if (tx && tx.projectId) {
@@ -329,29 +326,17 @@ const App: React.FC = () => {
             setTransactions(prev => prev.filter(t => t.id !== id));
         } 
         else if (type === 'project') {
-            // Delete Project
+            // 1. Delete Linked Transaction FIRST (clean up)
+            // We search for it manually to be sure
+            const linkedTx = await transactionService.fetchByProjectId(id);
+            if (linkedTx) {
+                 await transactionService.delete(linkedTx.id);
+                 setTransactions(prev => prev.filter(t => t.id !== linkedTx.id));
+            }
+
+            // 2. Delete Project
             await projectService.delete(id);
             setProjects(prev => prev.filter(p => p.id !== id));
-            
-            // Try to delete linked transaction if it exists
-            const linkedTx = transactions.find(t => t.projectId === id);
-            
-            // Even if not in local state, try to fetch and delete by project ID to be clean
-            try {
-               // We don't have a direct deleteByProjectId, but we can try to find and delete
-               let txToDeleteId = linkedTx?.id;
-               if (!txToDeleteId) {
-                   const fetched = await transactionService.fetchByProjectId(id);
-                   if (fetched) txToDeleteId = fetched.id;
-               }
-               
-               if (txToDeleteId) {
-                   await transactionService.delete(txToDeleteId);
-                   setTransactions(prev => prev.filter(t => t.id !== txToDeleteId));
-               }
-            } catch (e) {
-                console.log('Linked transaction cleanup handled or already done.');
-            }
         } 
         else if (type === 'client') {
             await clientService.delete(id);
@@ -363,7 +348,7 @@ const App: React.FC = () => {
         }
     } catch (error) {
         console.error("Erro fatal ao apagar:", error);
-        alert("Erro: O item não pôde ser apagado. Os dados serão recarregados.");
+        alert("Erro: O item não pôde ser apagado. Tente recarregar a página.");
         await loadAllData(); 
     } finally {
         setPendingDelete(null);
