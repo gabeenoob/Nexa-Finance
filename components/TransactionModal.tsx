@@ -1,5 +1,3 @@
-
-
 import React, { useState, useEffect } from 'react';
 import { X, Calendar, Hash, ArrowRightLeft, ArrowUpCircle, ArrowDownCircle, Trash2 } from 'lucide-react';
 import { Transaction, Category, Tag } from '../types';

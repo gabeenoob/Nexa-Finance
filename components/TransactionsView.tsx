@@ -32,7 +32,7 @@ const TransactionsView: React.FC<TransactionsViewProps> = ({ transactions, isVis
               <th className="p-4">Data/Hora</th>
               <th className="p-4">Tags</th>
               <th className="p-4 text-right">Valor</th>
-              <th className="p-4 rounded-tr-lg text-center">Ações</th>
+              {canEdit && <th className="p-4 rounded-tr-lg text-center">Ações</th>}
             </tr>
           </thead>
           <tbody className="text-sm">
@@ -75,29 +75,29 @@ const TransactionsView: React.FC<TransactionsViewProps> = ({ transactions, isVis
                 }`}>
                   {isVisible ? `R$ ${tx.amount.toLocaleString('pt-BR', {minimumFractionDigits: 2})}` : '••••••'}
                 </td>
-                <td className="p-4">
-                    {canEdit && (
+                {canEdit && (
+                    <td className="p-4">
                         <div className="flex items-center justify-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                          <button 
+                        <button 
                             onClick={() => onEdit(tx)}
                             className="p-1.5 text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded transition-colors"
                             title="Editar"
-                          >
-                              <Pencil size={16} />
-                          </button>
-                          <button 
+                        >
+                            <Pencil size={16} />
+                        </button>
+                        <button 
                             onClick={(e) => {
-                              e.stopPropagation();
-                              onDelete(tx.id); // Chama direto o pai (App.tsx), sem modal local
+                            e.stopPropagation();
+                            onDelete(tx.id); 
                             }}
                             className="p-1.5 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/30 rounded transition-colors"
                             title="Excluir"
-                          >
-                              <Trash2 size={16} />
-                          </button>
+                        >
+                            <Trash2 size={16} />
+                        </button>
                         </div>
-                    )}
-                </td>
+                    </td>
+                )}
               </tr>
             ))}
           </tbody>

@@ -1,5 +1,3 @@
-
-
 import React, { useState } from 'react';
 import { 
   Trash2, Plus, Building2, CheckCircle2, DollarSign, Clock, TrendingDown, Target, Edit3
@@ -36,8 +34,7 @@ const BusinessSettings: React.FC<BusinessSettingsProps> = ({
   const [isAdding, setIsAdding] = useState(false);
 
   const handleAddCostTemplate = async () => {
-    if(!canEdit) return;
-    if (!newCostName || !newCostAmount) return;
+    if (!newCostName || !newCostAmount || !canEdit) return;
     setIsAdding(true);
     try {
       const newCost: FixedCostTemplate = {
@@ -65,7 +62,6 @@ const BusinessSettings: React.FC<BusinessSettingsProps> = ({
     await onRemoveCost(id);
   };
 
-  // Helper to find the specific transaction for this month
   const findThisMonthTransaction = (costName: string) => {
     const now = new Date();
     return transactions.find(t => 
@@ -81,25 +77,13 @@ const BusinessSettings: React.FC<BusinessSettingsProps> = ({
     if(!canEdit) return;
     const existingTx = findThisMonthTransaction(cost.name);
     setActiveCostId(cost.id);
-    // If paid, allow editing the amount. If not, prepopulate default.
     setTransactionAmount(existingTx ? existingTx.amount.toString() : cost.defaultAmount.toString());
   }
 
   const confirmAction = (cost: FixedCostTemplate) => {
+    if(!canEdit) return;
     const now = new Date();
     const finalAmount = parseFloat(transactionAmount);
-    
-    // Logic: If exists, update it? 
-    // Ideally we would update the existing transaction ID, but `onGenerateTransaction` usually creates new.
-    // For simplicity in this view, we assume 'Pagar' creates. 
-    // To allow true editing of an existing transaction here requires `onUpdateTransaction` prop from App.tsx.
-    // Assuming we treat this as "Overwriting/Registering" for now or just creating new if not exists.
-    // *If the user wants to EDIT a paid one, they technically should go to Transactions view, 
-    // but we can support a "Re-register" flow or just visual feedback here.*
-    
-    // Since we only have onGenerateTransaction (create), we will just create. 
-    // Ideally, pass onUpdateTransaction to this component to fix properly.
-    // For now, we proceed with creation logic which is safe for "Pagar Agora".
     
     onGenerateTransaction({
       type: 'expense',
@@ -122,11 +106,9 @@ const BusinessSettings: React.FC<BusinessSettingsProps> = ({
       return `Dia ${day}`;
   };
 
-  // --- Metrics ---
   const totalEstimated = fixedCosts.reduce((acc, curr) => acc + curr.defaultAmount, 0);
   
   const now = new Date();
-  // Filter strictly for current month/year
   const paidFixedCosts = transactions
       .filter(t => 
           t.category === 'Custos Fixos' && 
@@ -221,95 +203,92 @@ const BusinessSettings: React.FC<BusinessSettingsProps> = ({
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-3 self-end sm:self-center">
-                    {isEditing ? (
-                        <div className="flex items-center gap-2 bg-white dark:bg-slate-900 p-1.5 rounded-xl border border-slate-200 dark:border-white/20 shadow-xl animate-in fade-in zoom-in ring-2 ring-blue-500/20">
-                            <span className="pl-3 text-xs font-bold text-slate-400">R$</span>
-                            <input 
-                                type="number" 
-                                value={transactionAmount}
-                                onChange={(e) => setTransactionAmount(e.target.value)}
-                                className="w-28 bg-transparent text-sm font-bold focus:outline-none text-slate-800 dark:text-white"
-                                autoFocus
-                            />
-                            <button onClick={() => confirmAction(cost)} className="p-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors">
-                                <CheckCircle2 size={16} />
-                            </button>
-                            <button onClick={() => setActiveCostId(null)} className="p-2 bg-slate-100 hover:bg-slate-200 dark:bg-white/10 dark:hover:bg-white/20 text-slate-600 dark:text-slate-300 rounded-lg transition-colors">
-                                <Trash2 size={16} />
-                            </button>
-                        </div>
-                    ) : (
-                        isPaid ? (
-                            <button 
-                                onClick={() => initAction(cost)}
-                                disabled={!canEdit}
-                                className="px-4 py-2.5 bg-emerald-100/50 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-400 rounded-xl text-xs font-bold flex items-center gap-2 border border-emerald-200 dark:border-emerald-500/30 hover:bg-emerald-100 dark:hover:bg-emerald-500/30 transition-all group disabled:opacity-50 disabled:cursor-not-allowed"
-                                title="Editar pagamento"
-                            >
-                                <CheckCircle2 size={16} /> 
-                                Pago 
-                                {canEdit && <span className="opacity-0 group-hover:opacity-100 transition-opacity ml-1 bg-emerald-200 dark:bg-emerald-900 px-1.5 rounded text-[10px]">Editar</span>}
-                            </button>
+                  {canEdit && (
+                    <div className="flex items-center gap-3 self-end sm:self-center">
+                        {isEditing ? (
+                            <div className="flex items-center gap-2 bg-white dark:bg-slate-900 p-1.5 rounded-xl border border-slate-200 dark:border-white/20 shadow-xl animate-in fade-in zoom-in ring-2 ring-blue-500/20">
+                                <span className="pl-3 text-xs font-bold text-slate-400">R$</span>
+                                <input 
+                                    type="number" 
+                                    value={transactionAmount}
+                                    onChange={(e) => setTransactionAmount(e.target.value)}
+                                    className="w-28 bg-transparent text-sm font-bold focus:outline-none text-slate-800 dark:text-white"
+                                    autoFocus
+                                />
+                                <button onClick={() => confirmAction(cost)} className="p-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors">
+                                    <CheckCircle2 size={16} />
+                                </button>
+                                <button onClick={() => setActiveCostId(null)} className="p-2 bg-slate-100 hover:bg-slate-200 dark:bg-white/10 dark:hover:bg-white/20 text-slate-600 dark:text-slate-300 rounded-lg transition-colors">
+                                    <Trash2 size={16} />
+                                </button>
+                            </div>
                         ) : (
-                            <button 
-                                onClick={() => initAction(cost)}
-                                disabled={!canEdit}
-                                className="px-5 py-2.5 bg-slate-900 dark:bg-white text-white dark:text-slate-900 rounded-xl text-xs font-bold hover:scale-105 active:scale-95 transition-all flex items-center gap-2 shadow-lg shadow-slate-900/10 dark:shadow-white/10 disabled:opacity-50 disabled:cursor-not-allowed"
-                            >
-                                <DollarSign size={14} /> Pagar Agora
-                            </button>
-                        )
-                    )}
-                    
-                    {canEdit && (
+                            isPaid ? (
+                                <button 
+                                    onClick={() => initAction(cost)}
+                                    className="px-4 py-2.5 bg-emerald-100/50 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-400 rounded-xl text-xs font-bold flex items-center gap-2 border border-emerald-200 dark:border-emerald-500/30 hover:bg-emerald-100 dark:hover:bg-emerald-500/30 transition-all group"
+                                    title="Editar pagamento"
+                                >
+                                    <CheckCircle2 size={16} /> 
+                                    Pago 
+                                    <span className="opacity-0 group-hover:opacity-100 transition-opacity ml-1 bg-emerald-200 dark:bg-emerald-900 px-1.5 rounded text-[10px]">Editar</span>
+                                </button>
+                            ) : (
+                                <button 
+                                    onClick={() => initAction(cost)}
+                                    className="px-5 py-2.5 bg-slate-900 dark:bg-white text-white dark:text-slate-900 rounded-xl text-xs font-bold hover:scale-105 active:scale-95 transition-all flex items-center gap-2 shadow-lg shadow-slate-900/10 dark:shadow-white/10"
+                                >
+                                    <DollarSign size={14} /> Pagar Agora
+                                </button>
+                            )
+                        )}
+                        
                         <button onClick={() => removeCostTemplate(cost.id)} className="text-slate-400 hover:text-red-500 transition-colors p-2.5 rounded-xl hover:bg-slate-100 dark:hover:bg-white/10">
-                          <Trash2 size={18} />
+                        <Trash2 size={18} />
                         </button>
-                    )}
-                  </div>
+                    </div>
+                  )}
                 </div>
               );
             })}
           </div>
 
-          <div className="pt-8 border-t border-slate-100 dark:border-white/10">
-            <p className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-4">Adicionar Novo Custo</p>
-            <div className="flex flex-col sm:flex-row gap-3">
-              <input 
-                placeholder="Nome (ex: Pro Labore)" 
-                disabled={!canEdit}
-                value={newCostName}
-                onChange={(e) => setNewCostName(e.target.value)}
-                className="flex-[2] bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl px-5 py-3.5 text-sm text-slate-800 dark:text-white outline-none focus:ring-2 focus:ring-blue-500/50 transition-all font-medium placeholder:text-slate-400 disabled:opacity-50"
-              />
-              <input 
-                placeholder="Valor (R$)" 
-                type="number"
-                disabled={!canEdit}
-                value={newCostAmount}
-                onChange={(e) => setNewCostAmount(e.target.value)}
-                className="flex-1 bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl px-5 py-3.5 text-sm text-slate-800 dark:text-white outline-none focus:ring-2 focus:ring-blue-500/50 transition-all font-medium placeholder:text-slate-400 disabled:opacity-50"
-              />
-              <input 
-                placeholder="Dia" 
-                type="number"
-                max={31}
-                min={1}
-                disabled={!canEdit}
-                value={newCostDay}
-                onChange={(e) => setNewCostDay(e.target.value)}
-                className="w-24 bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl px-5 py-3.5 text-sm text-slate-800 dark:text-white outline-none focus:ring-2 focus:ring-blue-500/50 transition-all font-medium placeholder:text-slate-400 disabled:opacity-50"
-              />
-              <button 
-                onClick={handleAddCostTemplate}
-                disabled={isAdding || !canEdit}
-                className="bg-blue-600 hover:bg-blue-700 text-white px-8 py-3.5 rounded-xl text-sm font-bold flex items-center justify-center transition-all shadow-lg shadow-blue-600/30 disabled:opacity-50 hover:scale-[1.02] active:scale-95"
-              >
-                {isAdding ? '...' : <><Plus size={18} className="mr-2" /> Adicionar</>}
-              </button>
+          {canEdit && (
+            <div className="pt-8 border-t border-slate-100 dark:border-white/10">
+                <p className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-4">Adicionar Novo Custo</p>
+                <div className="flex flex-col sm:flex-row gap-3">
+                <input 
+                    placeholder="Nome (ex: Pro Labore)" 
+                    value={newCostName}
+                    onChange={(e) => setNewCostName(e.target.value)}
+                    className="flex-[2] bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl px-5 py-3.5 text-sm text-slate-800 dark:text-white outline-none focus:ring-2 focus:ring-blue-500/50 transition-all font-medium placeholder:text-slate-400"
+                />
+                <input 
+                    placeholder="Valor (R$)" 
+                    type="number"
+                    value={newCostAmount}
+                    onChange={(e) => setNewCostAmount(e.target.value)}
+                    className="flex-1 bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl px-5 py-3.5 text-sm text-slate-800 dark:text-white outline-none focus:ring-2 focus:ring-blue-500/50 transition-all font-medium placeholder:text-slate-400"
+                />
+                <input 
+                    placeholder="Dia" 
+                    type="number"
+                    max={31}
+                    min={1}
+                    value={newCostDay}
+                    onChange={(e) => setNewCostDay(e.target.value)}
+                    className="w-24 bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl px-5 py-3.5 text-sm text-slate-800 dark:text-white outline-none focus:ring-2 focus:ring-blue-500/50 transition-all font-medium placeholder:text-slate-400"
+                />
+                <button 
+                    onClick={handleAddCostTemplate}
+                    disabled={isAdding}
+                    className="bg-blue-600 hover:bg-blue-700 text-white px-8 py-3.5 rounded-xl text-sm font-bold flex items-center justify-center transition-all shadow-lg shadow-blue-600/30 disabled:opacity-50 hover:scale-[1.02] active:scale-95"
+                >
+                    {isAdding ? '...' : <><Plus size={18} className="mr-2" /> Adicionar</>}
+                </button>
+                </div>
             </div>
-          </div>
+          )}
       </div>
     </div>
   );

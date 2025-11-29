@@ -1,203 +1,156 @@
-
-
 import React, { useState, useEffect } from 'react';
-import { WorkspaceMember, Role } from '../types';
-import { X, UserPlus, Shield, Trash2, Mail, CheckCircle, AlertCircle } from 'lucide-react';
+import { X, Users, Mail, Shield, User, Trash2 } from 'lucide-react';
+import { Workspace, WorkspaceMember, Role } from '../types';
 import { workspaceService } from '../services/api';
 
 interface WorkspaceSettingsProps {
   isOpen: boolean;
   onClose: () => void;
-  workspaceId: string;
-  currentUserId: string;
-  isAdmin: boolean;
-  workspaceName: string;
+  workspace: Workspace | null;
+  currentUserRole: Role;
 }
 
-const WorkspaceSettings: React.FC<WorkspaceSettingsProps> = ({ 
-  isOpen, onClose, workspaceId, currentUserId, isAdmin, workspaceName 
-}) => {
+const WorkspaceSettings: React.FC<WorkspaceSettingsProps> = ({ isOpen, onClose, workspace, currentUserRole }) => {
   const [members, setMembers] = useState<WorkspaceMember[]>([]);
   const [loading, setLoading] = useState(false);
   const [inviteEmail, setInviteEmail] = useState('');
   const [inviteRole, setInviteRole] = useState<Role>('viewer');
-  const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState<string | null>(null);
+
+  const canManageMembers = currentUserRole === 'owner' || currentUserRole === 'admin';
 
   useEffect(() => {
-    if (isOpen && workspaceId) {
+    if (isOpen && workspace) {
       loadMembers();
     }
-  }, [isOpen, workspaceId]);
+  }, [isOpen, workspace]);
 
   const loadMembers = async () => {
+    if(!workspace) return;
     setLoading(true);
     try {
-      const data = await workspaceService.getMembers(workspaceId);
-      // Ensure data is array, default to empty if null/undefined
-      setMembers(Array.isArray(data) ? data : []);
+      const list = await workspaceService.getMembers(workspace.id);
+      setMembers(list);
     } catch (e) {
       console.error(e);
-      setError('Erro ao carregar membros.');
-      setMembers([]); // Fallback
     } finally {
       setLoading(false);
     }
   };
 
-  const handleInvite = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!inviteEmail) return;
-    setError(null);
-    setSuccess(null);
+  const handleInvite = async () => {
+    if (!workspace || !inviteEmail) return;
     try {
-      await workspaceService.inviteMember(workspaceId, inviteEmail, inviteRole);
-      setSuccess(`Convite enviado para ${inviteEmail}`);
-      setInviteEmail('');
-      loadMembers();
-    } catch (err: any) {
-      setError(err.message || 'Falha ao convidar.');
+        await workspaceService.inviteMember(workspace.id, inviteEmail, inviteRole);
+        setInviteEmail('');
+        loadMembers(); // Reload list
+    } catch (e) {
+        alert("Erro ao convidar usuário.");
     }
   };
 
   const handleRemove = async (memberId: string) => {
-    if (!confirm('Tem certeza que deseja remover este membro?')) return;
-    try {
-      await workspaceService.removeMember(memberId);
-      setMembers(prev => prev.filter(m => m.id !== memberId));
-    } catch (err) {
-      console.error(err);
+    if(confirm("Remover este membro?")) {
+        await workspaceService.removeMember(memberId);
+        loadMembers();
     }
-  };
+  }
 
   const handleRoleChange = async (memberId: string, newRole: Role) => {
-      try {
-          await workspaceService.updateMemberRole(memberId, newRole);
-          setMembers(prev => prev.map(m => m.id === memberId ? {...m, role: newRole} : m));
-      } catch (err) {
-          console.error(err);
-      }
-  };
+      await workspaceService.updateRole(memberId, newRole);
+      loadMembers();
+  }
 
-  if (!isOpen) return null;
+  if (!isOpen || !workspace) return null;
 
   return (
     <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
-      <div className="bg-white dark:bg-slate-900 w-full max-w-2xl rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[85vh]">
-        <div className="flex items-center justify-between p-6 border-b border-slate-100 dark:border-slate-800">
-            <div>
-                <h2 className="text-xl font-bold text-slate-800 dark:text-white">Gerenciar Membros</h2>
-                <p className="text-sm text-slate-500">Espaço: <span className="font-bold">{workspaceName}</span></p>
-            </div>
-            <button onClick={onClose} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full transition-colors text-slate-500">
-                <X size={20} />
-            </button>
+      <div className="bg-white dark:bg-slate-900 w-full max-w-2xl rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+        <div className="flex items-center justify-between p-4 border-b border-slate-100 dark:border-slate-800">
+          <h2 className="text-lg font-bold text-slate-800 dark:text-white flex items-center gap-2">
+             <Users size={20} className="text-blue-500" />
+             Gerenciar Membros
+          </h2>
+          <button onClick={onClose} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full transition-colors text-slate-500">
+            <X size={20} />
+          </button>
         </div>
 
-        <div className="p-6 flex-1 overflow-y-auto custom-scrollbar">
-            
-            {/* Invite Form */}
-            {isAdmin && workspaceId !== 'legacy' && (
-                <div className="bg-slate-50 dark:bg-slate-800/50 p-5 rounded-xl border border-slate-100 dark:border-slate-700 mb-8">
-                    <h3 className="text-sm font-bold text-slate-700 dark:text-white mb-3 flex items-center gap-2">
-                        <UserPlus size={16} className="text-blue-500" /> Convidar Novo Membro
-                    </h3>
-                    
-                    {error && (
-                        <div className="mb-3 p-3 bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-300 text-xs font-bold rounded-lg flex items-center gap-2">
-                            <AlertCircle size={14} /> {error}
-                        </div>
-                    )}
-                    {success && (
-                         <div className="mb-3 p-3 bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-300 text-xs font-bold rounded-lg flex items-center gap-2">
-                            <CheckCircle size={14} /> {success}
-                        </div>
-                    )}
+        <div className="p-6 overflow-y-auto custom-scrollbar flex-1">
+            <div className="mb-6">
+                <h3 className="font-bold text-slate-700 dark:text-slate-200 mb-2">{workspace.name}</h3>
+                <p className="text-sm text-slate-500">Gerencie quem tem acesso a este espaço.</p>
+            </div>
 
-                    <form onSubmit={handleInvite} className="flex gap-2">
+            {canManageMembers && (
+                <div className="bg-slate-50 dark:bg-slate-800/50 p-4 rounded-xl border border-slate-100 dark:border-slate-700 mb-8">
+                    <label className="text-xs font-bold uppercase text-slate-500 mb-2 block">Convidar por Email</label>
+                    <div className="flex gap-2">
                         <div className="relative flex-1">
                             <Mail className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4" />
                             <input 
                                 type="email" 
-                                required
                                 value={inviteEmail}
                                 onChange={e => setInviteEmail(e.target.value)}
-                                placeholder="Email do usuário..."
-                                className="w-full pl-9 pr-4 py-2.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-600 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500"
+                                placeholder="email@exemplo.com"
+                                className="w-full pl-9 p-2.5 rounded-lg border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-900 text-sm"
                             />
                         </div>
                         <select 
                             value={inviteRole}
-                            onChange={(e) => setInviteRole(e.target.value as Role)}
-                            className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-600 rounded-lg px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-500"
+                            onChange={e => setInviteRole(e.target.value as Role)}
+                            className="p-2.5 rounded-lg border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-900 text-sm font-bold"
                         >
                             <option value="viewer">Visualizador</option>
                             <option value="admin">Administrador</option>
                         </select>
-                        <button type="submit" className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2.5 rounded-lg text-sm font-bold transition-colors">
+                        <button 
+                            onClick={handleInvite}
+                            className="bg-blue-600 text-white px-4 rounded-lg text-sm font-bold hover:bg-blue-700"
+                        >
                             Convidar
                         </button>
-                    </form>
-                </div>
-            )}
-            
-            {workspaceId === 'legacy' && (
-                <div className="p-4 bg-orange-100 dark:bg-orange-900/20 text-orange-600 dark:text-orange-400 rounded-xl mb-4 text-sm font-bold flex items-center gap-2">
-                    <AlertCircle size={16} />
-                    Funcionalidade de membros indisponível no Modo Legado.
+                    </div>
                 </div>
             )}
 
-            {/* Member List */}
-            <div>
-                <h3 className="text-sm font-bold text-slate-500 uppercase tracking-wider mb-4">Membros Ativos ({members.length})</h3>
-                <div className="space-y-3">
-                    {members.map(member => (
-                        <div key={member.id} className="flex items-center justify-between p-3 bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-xl">
-                            <div className="flex items-center gap-3">
-                                <div className={`w-10 h-10 rounded-full flex items-center justify-center text-white font-bold text-xs ${member.role === 'owner' ? 'bg-indigo-500' : member.role === 'admin' ? 'bg-blue-500' : 'bg-slate-400'}`}>
-                                    {member.role.charAt(0).toUpperCase()}
-                                </div>
-                                <div>
-                                    <p className="text-sm font-bold text-slate-800 dark:text-white">{member.email}</p>
-                                    <div className="flex items-center gap-1.5 mt-0.5">
-                                        <Shield size={10} className={member.role === 'owner' ? 'text-indigo-500' : member.role === 'admin' ? 'text-blue-500' : 'text-slate-400'} />
-                                        <span className="text-xs text-slate-500 capitalize">
-                                            {member.role === 'owner' ? 'Dono do Espaço' : member.role === 'admin' ? 'Administrador' : 'Visualizador'}
-                                        </span>
-                                    </div>
-                                </div>
+            <div className="space-y-1">
+                {loading ? <p className="text-center text-slate-500">Carregando...</p> : members.map(member => (
+                    <div key={member.id} className="flex items-center justify-between p-3 hover:bg-slate-50 dark:hover:bg-slate-800/50 rounded-lg transition-colors border border-transparent hover:border-slate-100 dark:hover:border-slate-700">
+                        <div className="flex items-center gap-3">
+                            <div className="w-8 h-8 rounded-full bg-slate-200 dark:bg-slate-700 flex items-center justify-center">
+                                <User size={14} className="text-slate-500 dark:text-slate-300" />
                             </div>
-
-                            {/* Actions (Only Admin/Owner can edit, Owner cannot be edited) */}
-                            {isAdmin && member.role !== 'owner' && member.userId !== currentUserId && (
-                                <div className="flex items-center gap-2">
-                                    <select 
-                                        value={member.role}
-                                        onChange={(e) => handleRoleChange(member.id, e.target.value as Role)}
-                                        className="text-xs bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded px-2 py-1 outline-none"
-                                    >
-                                        <option value="viewer">Visualizador</option>
-                                        <option value="admin">Admin</option>
-                                    </select>
-                                    <button 
-                                        onClick={() => handleRemove(member.id)}
-                                        className="p-1.5 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
-                                        title="Remover acesso"
-                                    >
-                                        <Trash2 size={16} />
-                                    </button>
-                                </div>
-                            )}
-                             {member.userId === currentUserId && (
-                                <span className="text-xs font-bold bg-slate-100 dark:bg-slate-700 text-slate-500 px-2 py-1 rounded">Você</span>
-                            )}
+                            <div>
+                                <p className="text-sm font-bold text-slate-700 dark:text-slate-200">{member.email}</p>
+                                <p className="text-[10px] text-slate-400 uppercase">{member.role === 'owner' ? 'Dono do Espaço' : member.role === 'admin' ? 'Administrador' : 'Visualizador'}</p>
+                            </div>
                         </div>
-                    ))}
-                    {members.length === 0 && !loading && (
-                        <p className="text-slate-400 text-sm italic">Nenhum membro encontrado.</p>
-                    )}
-                </div>
+
+                        {canManageMembers && member.role !== 'owner' && (
+                            <div className="flex items-center gap-2">
+                                <select 
+                                    value={member.role}
+                                    onChange={(e) => handleRoleChange(member.id, e.target.value as Role)}
+                                    className="text-xs bg-slate-100 dark:bg-slate-800 border-none rounded py-1 pl-2 pr-6 cursor-pointer"
+                                >
+                                    <option value="viewer">Visualizador</option>
+                                    <option value="admin">Admin</option>
+                                </select>
+                                <button 
+                                    onClick={() => handleRemove(member.id)}
+                                    className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded"
+                                >
+                                    <Trash2 size={14} />
+                                </button>
+                            </div>
+                        )}
+                        {member.role === 'owner' && (
+                            <div title="Dono">
+                                <Shield size={16} className="text-purple-500" />
+                            </div>
+                        )}
+                    </div>
+                ))}
             </div>
         </div>
       </div>
