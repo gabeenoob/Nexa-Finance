@@ -224,7 +224,6 @@ const App: React.FC = () => {
     
     const createdProject = await projectService.create(user.id, projectData);
     setProjects(prev => [...prev, createdProject]);
-
     await syncProjectToTransaction(createdProject);
 
     return createdProject;
@@ -235,11 +234,8 @@ const App: React.FC = () => {
     
     const updatedProject = await projectService.update(id, projectData);
     setProjects(prev => prev.map(proj => proj.id === id ? updatedProject : proj));
-
     await syncProjectToTransaction(updatedProject);
   });
-
-  // --- OTHER HANDLERS ---
 
   const handleCreateClient = (c: any) => safeExecute(async () => {
     if(!user) return;
@@ -368,23 +364,15 @@ const App: React.FC = () => {
   const periodBalance = filteredTransactions.reduce((acc, t) => t.type === 'income' ? acc + t.amount : t.type === 'expense' ? acc - t.amount : acc, 0);
   const totalIncome = filteredTransactions.filter(t => t.type === 'income').reduce((acc, t) => acc + t.amount, 0);
   const totalExpense = filteredTransactions.filter(t => t.type === 'expense').reduce((acc, t) => acc + t.amount, 0);
-  
-  // Calculate Free Cash (Caixa Livre) Logic
   const totalCashBalance = transactions.filter(t => t.accountId === accountType).reduce((acc, t) => t.type === 'income' ? acc + t.amount : acc - t.amount, 0);
   
-  let freeCash = totalCashBalance;
-  let reserveLabel = "Caixa Livre";
-  let reserveIcon = <ShieldCheck size={20} />;
-  
-  if (accountType === 'business') {
-      const totalMonthlyFixedCosts = fixedCosts.reduce((acc, c) => acc + c.defaultAmount, 0);
-      const reservePercent = appSettings.business.cashFlow.workingCapitalPercent || 50;
-      const requiredReserve = totalMonthlyFixedCosts * (reservePercent / 100);
-      freeCash = totalCashBalance - requiredReserve;
-  } else {
-      reserveLabel = "Caixa Livre";
-      reserveIcon = <Wallet size={20} />;
-  }
+  // --- LOGICA DE CAIXA LIVRE NO DASHBOARD ---
+  // Calculamos quanto do caixa total está livre (descontando reserva de capital de giro)
+  const totalFixedCostsMonthly = fixedCosts.reduce((acc, cost) => acc + cost.defaultAmount, 0);
+  const reservePercent = appSettings.business.cashFlow.workingCapitalPercent || 50;
+  // Se for conta pessoal, não aplica regra de reserva estrita, ou aplica 0
+  const requiredReserve = accountType === 'business' ? totalFixedCostsMonthly * (reservePercent / 100) : 0;
+  const freeCash = totalCashBalance - requiredReserve;
   
   const getFilteredProjects = () => {
       const now = new Date();
@@ -425,7 +413,7 @@ const App: React.FC = () => {
             settings={appSettings}
           />
 
-          <main className="max-w-[1600px] mx-auto px-4 pt-8 pb-20 space-y-8 animate-enter">
+          <main className="max-w-[1600px] mx-auto px-4 pt-8 pb-20 space-y-8 animate-slide-up">
             {loadError && (
               <div className="bg-amber-100 border border-amber-200 text-amber-800 p-4 rounded-xl flex items-center gap-2">
                 <AlertTriangle size={20} /> {loadError}
@@ -434,12 +422,12 @@ const App: React.FC = () => {
 
             <div className="flex flex-wrap items-center justify-between gap-4">
               <div>
-                <h1 className="text-3xl font-black text-slate-900 dark:text-white tracking-tight animate-in fade-in slide-in-from-bottom-2 duration-700">
-                  {currentView === 'dashboard' ? 'Visão Geral' : currentView === 'transactions' ? 'Transações' : currentView === 'projects' ? 'Projetos' : currentView}
+                <h1 className="text-3xl font-black text-slate-900 dark:text-white tracking-tight animate-in fade-in slide-in-from-left-4 duration-500">
+                  {currentView === 'dashboard' ? 'Visão Geral' : currentView === 'transactions' ? 'Transações' : currentView === 'projects' ? 'Projetos' : currentView === 'cashflow' ? 'Fluxo de Caixa' : currentView}
                 </h1>
-                <p className="text-slate-500 dark:text-slate-400 text-sm mt-1 font-medium animate-in fade-in slide-in-from-bottom-3 duration-700 delay-100">{accountType === 'business' ? 'Perfil Empresarial' : 'Perfil Pessoal'}</p>
+                <p className="text-slate-500 dark:text-slate-400 text-sm mt-1 font-medium animate-in fade-in slide-in-from-left-4 duration-700 delay-100">{accountType === 'business' ? 'Perfil Empresarial' : 'Perfil Pessoal'}</p>
               </div>
-              <div className="flex gap-3 animate-in fade-in slide-in-from-right-4 duration-700">
+              <div className="flex gap-3 animate-in fade-in slide-in-from-right-4 duration-500">
                 {(currentView === 'dashboard' || currentView === 'calendar') && (
                   <div className="bg-white dark:bg-white/10 dark:backdrop-blur-md rounded-xl p-1 flex border border-slate-200 dark:border-white/10">
                     {['week', 'month', 'year'].map(t => (
@@ -459,41 +447,43 @@ const App: React.FC = () => {
             {currentView === 'dashboard' && (
               <>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                  <div className="animate-enter animate-delay-100 h-full">
-                     <BalanceCard totalBalance={periodBalance} monthlyIncome={totalIncome} monthlyExpense={totalExpense} isVisible={valuesVisible} label="Saldo do Período" />
+                  <div className="animate-in fade-in zoom-in duration-500 delay-100">
+                      <BalanceCard totalBalance={periodBalance} monthlyIncome={totalIncome} monthlyExpense={totalExpense} isVisible={valuesVisible} label="Saldo do Período" />
                   </div>
+                  
                   <div className="md:col-span-2 grid grid-cols-1 sm:grid-cols-3 gap-4">
-                      
-                      {/* Caixa Livre Card - Redesigned */}
-                      <div className="bg-white dark:bg-white/5 dark:backdrop-blur-xl p-6 rounded-3xl shadow-sm border border-slate-200 dark:border-white/10 tech-card animate-enter animate-delay-200">
-                        <div className={`flex items-center gap-2 mb-3 ${freeCash < 0 ? 'text-amber-500' : 'text-emerald-600 dark:text-emerald-400'}`}>
-                            {reserveIcon}
-                            <span className="text-xs font-bold uppercase tracking-wider">{reserveLabel}</span>
+                      {/* CARD CAIXA LIVRE (MODIFICADO) */}
+                      <div className="bg-white dark:bg-white/5 dark:backdrop-blur-xl p-6 rounded-3xl shadow-sm border border-slate-200 dark:border-white/10 transition-all hover:scale-[1.01] hover:shadow-md animate-in fade-in zoom-in duration-500 delay-200 group">
+                        <div className="flex items-center gap-2 mb-3 text-emerald-600 dark:text-emerald-400">
+                            <ShieldCheck size={20} />
+                            <span className="text-xs font-bold uppercase tracking-wider">Caixa Livre</span>
                         </div>
-                        <div className={`text-3xl xl:text-4xl font-black tracking-tight ${freeCash < 0 ? 'text-amber-500' : 'text-slate-800 dark:text-white'}`}>
-                            {valuesVisible ? `R$ ${freeCash.toLocaleString()}` : '••••'}
+                        <div className={`text-3xl xl:text-4xl font-black tracking-tight ${freeCash < 0 ? 'text-red-500' : 'text-slate-800 dark:text-white'}`}>
+                            {valuesVisible ? `R$ ${freeCash.toLocaleString('pt-BR', { compactDisplay: 'short', notation: 'compact' })}` : '••••'}
                         </div>
-                        <div className="text-[10px] text-slate-400 mt-2 font-medium">
-                            {accountType === 'business' ? 'Após reserva de emergência' : 'Disponível para uso'}
-                        </div>
+                        {accountType === 'business' && (
+                            <div className="mt-2 text-[10px] font-bold text-slate-400">
+                                Total: R$ {totalCashBalance.toLocaleString('pt-BR', { compactDisplay: 'short' })}
+                            </div>
+                        )}
                       </div>
 
-                      <div className="bg-white dark:bg-white/5 dark:backdrop-blur-xl p-6 rounded-3xl shadow-sm border border-slate-200 dark:border-white/10 tech-card animate-enter animate-delay-200">
+                      <div className="bg-white dark:bg-white/5 dark:backdrop-blur-xl p-6 rounded-3xl shadow-sm border border-slate-200 dark:border-white/10 transition-all hover:scale-[1.01] hover:shadow-md animate-in fade-in zoom-in duration-500 delay-300">
                         <div className="flex items-center gap-2 mb-3 text-blue-600 dark:text-blue-400"><CheckCircle size={20} /><span className="text-xs font-bold uppercase tracking-wider">Movimentações</span></div>
                         <div className="text-3xl xl:text-4xl font-black text-slate-800 dark:text-white tracking-tight">{filteredTransactions.length}</div>
                       </div>
-                      
-                      <div className="bg-white dark:bg-white/5 dark:backdrop-blur-xl p-6 rounded-3xl shadow-sm border border-slate-200 dark:border-white/10 tech-card animate-enter animate-delay-300">
+
+                      <div className="bg-white dark:bg-white/5 dark:backdrop-blur-xl p-6 rounded-3xl shadow-sm border border-slate-200 dark:border-white/10 transition-all hover:scale-[1.01] hover:shadow-md animate-in fade-in zoom-in duration-500 delay-500">
                         <div className="flex items-center gap-2 mb-3 text-purple-600 dark:text-purple-400"><FolderPlus size={20} /><span className="text-xs font-bold uppercase tracking-wider">Novos Projetos</span></div>
                         <div className="text-3xl xl:text-4xl font-black text-slate-800 dark:text-white tracking-tight">{newProjectsCount}</div>
                         <div className="text-[10px] text-slate-400 mt-1 uppercase font-bold">{projectLabel}</div>
                       </div>
                   </div>
                 </div>
-                <div className="animate-enter animate-delay-300">
+                <div className="animate-in slide-in-from-bottom-8 duration-700 delay-300">
                     <OverviewCharts transactions={filteredTransactions} isVisible={valuesVisible} />
                 </div>
-                <div className="animate-enter animate-delay-300">
+                <div className="animate-in slide-in-from-bottom-8 duration-700 delay-500">
                     <TransactionList transactions={filteredTransactions} isVisible={valuesVisible} />
                 </div>
               </>

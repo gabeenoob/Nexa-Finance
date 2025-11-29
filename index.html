@@ -18,22 +18,23 @@
               }
             },
             animation: {
-              'fade-up': 'fadeUp 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards',
-              'fade-in': 'fadeIn 0.5s ease-out forwards',
-              'scale-in': 'scaleIn 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards',
+              'fade-in': 'fadeIn 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards',
+              'slide-up': 'slideUp 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards',
+              'zoom-in': 'zoomIn 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards',
+              'pulse-slow': 'pulse 4s cubic-bezier(0.4, 0, 0.6, 1) infinite',
             },
             keyframes: {
-              fadeUp: {
-                '0%': { opacity: 0, transform: 'translateY(20px)' },
-                '100%': { opacity: 1, transform: 'translateY(0)' },
-              },
               fadeIn: {
-                '0%': { opacity: 0 },
-                '100%': { opacity: 1 },
+                '0%': { opacity: '0' },
+                '100%': { opacity: '1' },
               },
-              scaleIn: {
-                '0%': { opacity: 0, transform: 'scale(0.95)' },
-                '100%': { opacity: 1, transform: 'scale(1)' },
+              slideUp: {
+                '0%': { opacity: '0', transform: 'translateY(20px)' },
+                '100%': { opacity: '1', transform: 'translateY(0)' },
+              },
+              zoomIn: {
+                '0%': { opacity: '0', transform: 'scale(0.95)' },
+                '100%': { opacity: '1', transform: 'scale(1)' },
               }
             }
           }
@@ -41,56 +42,54 @@
       }
     </script>
     <style>
-      /* Custom scrollbar */
+      /* Custom scrollbar for a cleaner look */
       ::-webkit-scrollbar {
-        width: 8px;
-        height: 8px;
+        width: 6px;
+        height: 6px;
       }
       ::-webkit-scrollbar-track {
         background: transparent;
       }
       ::-webkit-scrollbar-thumb {
         background: #cbd5e1;
-        border-radius: 4px;
+        border-radius: 10px;
       }
       ::-webkit-scrollbar-thumb:hover {
         background: #94a3b8;
       }
       .dark ::-webkit-scrollbar-thumb {
-        background: #475569;
+        background: #334155;
       }
       .dark ::-webkit-scrollbar-thumb:hover {
-        background: #64748b;
+        background: #475569;
       }
 
-      /* Modern Animations & Utilities */
-      .animate-enter {
-        opacity: 0;
-        animation: fadeUp 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+      /* Global Animations & Utilities */
+      body {
+        overflow-x: hidden;
       }
       
-      .animate-delay-100 { animation-delay: 100ms; }
-      .animate-delay-200 { animation-delay: 200ms; }
-      .animate-delay-300 { animation-delay: 300ms; }
-
       .glass-panel {
         background: rgba(255, 255, 255, 0.7);
         backdrop-filter: blur(12px);
         -webkit-backdrop-filter: blur(12px);
-        border: 1px solid rgba(255, 255, 255, 0.5);
+        border: 1px solid rgba(255, 255, 255, 0.3);
       }
       
       .dark .glass-panel {
         background: rgba(15, 23, 42, 0.6);
-        border: 1px solid rgba(255, 255, 255, 0.08);
+        border: 1px solid rgba(255, 255, 255, 0.05);
       }
 
-      .tech-card {
-        transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
-      }
-      .tech-card:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 10px 30px -10px rgba(0,0,0,0.15);
+      /* Staggered Animation Delays */
+      .delay-100 { animation-delay: 100ms; }
+      .delay-200 { animation-delay: 200ms; }
+      .delay-300 { animation-delay: 300ms; }
+      .delay-500 { animation-delay: 500ms; }
+
+      /* Smooth Chart Gradients */
+      .chart-gradient-mask {
+        mask-image: linear-gradient(to bottom, black, transparent);
       }
     </style>
   <script type="importmap">
