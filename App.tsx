@@ -158,13 +158,12 @@ const App: React.FC = () => {
               let newName = savedTx.description;
               if (newName.startsWith('Projeto: ')) newName = newName.replace('Projeto: ', '');
 
-              // Update project if data diverged
-              const shouldUpdate = 
-                  linkedProject.value !== savedTx.amount || 
-                  linkedProject.startDate.getTime() !== savedTx.date.getTime() ||
-                  linkedProject.name !== newName;
+              // Check if actual values changed to avoid loop
+              const amountChanged = Math.abs(linkedProject.value - savedTx.amount) > 0.01;
+              const dateChanged = linkedProject.startDate.getTime() !== savedTx.date.getTime();
+              const nameChanged = linkedProject.name !== newName;
 
-              if (shouldUpdate) {
+              if (amountChanged || dateChanged || nameChanged) {
                   const updatedProj = await projectService.update(linkedProject.id, {
                       value: savedTx.amount,
                       startDate: savedTx.date,
@@ -217,30 +216,39 @@ const App: React.FC = () => {
     const updatedProject = await projectService.update(id, projectData);
     setProjects(prev => prev.map(proj => proj.id === id ? updatedProject : proj));
 
-    // 2. Find Linked Transaction and Update it (Do not create new)
-    const linkedTx = transactions.find(t => t.projectId === id);
+    // 2. Find Linked Transaction (Locally OR via API to be safe)
+    let linkedTx = transactions.find(t => t.projectId === id);
+    
+    // If not found locally, try to fetch it to ensure we don't duplicate or fail
+    if (!linkedTx) {
+       const found = await transactionService.fetchByProjectId(id);
+       if (found) linkedTx = found;
+    }
     
     if (linkedTx) {
+      // 3. Update the existing transaction
       const newDescription = `Projeto: ${updatedProject.name}`;
       const newAmount = Number(updatedProject.value);
       const newDate = new Date(updatedProject.startDate);
 
-      // Only API call if changed
-      if (
-          linkedTx.description !== newDescription || 
-          linkedTx.amount !== newAmount || 
-          linkedTx.date.getTime() !== newDate.getTime()
-      ) {
-          const updatedTx = await transactionService.update(linkedTx.id, {
-            description: newDescription,
-            amount: newAmount,
-            date: newDate
-          });
-          setTransactions(prev => prev.map(t => t.id === linkedTx.id ? updatedTx : t));
-      }
+      const updatedTx = await transactionService.update(linkedTx.id, {
+        description: newDescription,
+        amount: newAmount,
+        date: newDate
+      });
+      
+      // Update local state (whether it was there before or we just fetched it)
+      setTransactions(prev => {
+        const exists = prev.some(t => t.id === updatedTx.id);
+        if (exists) {
+           return prev.map(t => t.id === updatedTx.id ? updatedTx : t);
+        } else {
+           return [...prev, updatedTx];
+        }
+      });
     } else {
-        // Fallback: If for some reason transaction was deleted but project exists, recreate it?
-        // User requested strict syncing. Let's recreate it to ensure consistency.
+        // 4. Healing: If for some reason it doesn't exist at all, recreate it.
+        // This handles cases where user might have deleted the transaction manually but kept the project.
         const clientName = clients.find(c => c.id === updatedProject.clientId)?.name || 'Cliente';
         const txPayload = {
             description: `Projeto: ${updatedProject.name}`,
@@ -325,13 +333,24 @@ const App: React.FC = () => {
             await projectService.delete(id);
             setProjects(prev => prev.filter(p => p.id !== id));
             
-            // Delete Linked Transaction from state (API handles strict delete if implemented, but we filter state)
-            // Ideally, we should also call API to delete transaction if cascading isn't set up in DB.
-            // For safety, let's find and delete the transaction via API too.
+            // Try to delete linked transaction if it exists
             const linkedTx = transactions.find(t => t.projectId === id);
-            if (linkedTx) {
-                try { await transactionService.delete(linkedTx.id); } catch(e) { console.log('Tx already deleted or cascade worked'); }
-                setTransactions(prev => prev.filter(t => t.projectId !== id));
+            
+            // Even if not in local state, try to fetch and delete by project ID to be clean
+            try {
+               // We don't have a direct deleteByProjectId, but we can try to find and delete
+               let txToDeleteId = linkedTx?.id;
+               if (!txToDeleteId) {
+                   const fetched = await transactionService.fetchByProjectId(id);
+                   if (fetched) txToDeleteId = fetched.id;
+               }
+               
+               if (txToDeleteId) {
+                   await transactionService.delete(txToDeleteId);
+                   setTransactions(prev => prev.filter(t => t.id !== txToDeleteId));
+               }
+            } catch (e) {
+                console.log('Linked transaction cleanup handled or already done.');
             }
         } 
         else if (type === 'client') {

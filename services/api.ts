@@ -97,6 +97,26 @@ export const transactionService = {
     })) as Transaction[];
   },
 
+  // Busca específica para garantir sincronia
+  async fetchByProjectId(projectId: string) {
+    const { data, error } = await supabase.from('transactions').select('*').eq('project_id', projectId).maybeSingle();
+    if (error) return null; // Não lança erro, apenas retorna null se não achar
+    if (!data) return null;
+
+    return {
+      id: data.id,
+      type: data.type,
+      amount: Number(data.amount || 0),
+      description: data.description,
+      date: new Date(data.date),
+      category: data.category,
+      tags: Array.isArray(data.tags) ? data.tags : [],
+      accountId: data.account_id || 'personal',
+      location: data.location,
+      projectId: data.project_id
+    } as Transaction;
+  },
+
   async create(userId: string, tx: Omit<Transaction, 'id'>) {
     const payload = sanitizePayload({
       user_id: userId,
