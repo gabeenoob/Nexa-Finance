@@ -140,14 +140,40 @@ const App: React.FC = () => {
   const handleSaveTransaction = (txData: any, id?: string) => safeExecute(async () => {
     if (!user) return;
     const payload = { ...txData, date: new Date(txData.date), accountId: accountType };
+    
+    let savedTx: Transaction;
+
     if (id) {
-      const updated = await transactionService.update(id, payload);
-      setTransactions(prev => prev.map(t => t.id === id ? updated : t));
+      savedTx = await transactionService.update(id, payload);
+      setTransactions(prev => prev.map(t => t.id === id ? savedTx : t));
     } else {
-      const created = await transactionService.create(user.id, payload);
-      setTransactions(prev => [...prev, created]);
+      savedTx = await transactionService.create(user.id, payload);
+      setTransactions(prev => [...prev, savedTx]);
     }
+    
     setIsTransactionModalOpen(false);
+
+    // SYNC REVERSE: Transaction -> Project
+    // If this transaction is linked to a project, verify if we need to update the project stats
+    if (savedTx.projectId) {
+        const linkedProject = projects.find(p => p.id === savedTx.projectId);
+        
+        if (linkedProject) {
+            // Check for discrepancies in Value or Date
+            // We do NOT sync description -> name automatically to preserve project naming
+            const shouldUpdate = 
+                linkedProject.value !== savedTx.amount || 
+                linkedProject.startDate.getTime() !== savedTx.date.getTime();
+
+            if (shouldUpdate) {
+                const updatedProj = await projectService.update(linkedProject.id, {
+                    value: savedTx.amount,
+                    startDate: savedTx.date
+                });
+                setProjects(prev => prev.map(p => p.id === linkedProject.id ? updatedProj : p));
+            }
+        }
+    }
   });
 
   const handleCreateProject = (p: any) => safeExecute(async () => {
@@ -164,19 +190,26 @@ const App: React.FC = () => {
     const updatedProject = await projectService.update(id, p);
     setProjects(prev => prev.map(proj => proj.id === id ? updatedProject : proj));
 
-    // 2. Automatically Update Linked Transaction if exists
+    // 2. Automatically Update Linked Transaction if exists (SYNC FORWARD: Project -> Transaction)
     const linkedTx = transactions.find(t => t.projectId === id);
     if (linkedTx) {
       const newDescription = p.name ? `Projeto: ${p.name}` : linkedTx.description;
       const newAmount = p.value !== undefined ? Number(p.value) : linkedTx.amount;
       const newDate = p.startDate ? new Date(p.startDate) : linkedTx.date;
 
-      const updatedTx = await transactionService.update(linkedTx.id, {
-        description: newDescription,
-        amount: newAmount,
-        date: newDate
-      });
-      setTransactions(prev => prev.map(t => t.id === linkedTx.id ? updatedTx : t));
+      // Only call API if something changed
+      if (
+          linkedTx.description !== newDescription || 
+          linkedTx.amount !== newAmount || 
+          linkedTx.date.getTime() !== newDate.getTime()
+      ) {
+          const updatedTx = await transactionService.update(linkedTx.id, {
+            description: newDescription,
+            amount: newAmount,
+            date: newDate
+          });
+          setTransactions(prev => prev.map(t => t.id === linkedTx.id ? updatedTx : t));
+      }
     }
   });
 
