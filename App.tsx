@@ -13,24 +13,23 @@ import SettingsView from './components/SettingsView';
 import CashFlowView from './components/CashFlowView';
 import ReportsView from './components/ReportsView';
 import ProjectsView from './components/ProjectsView';
-import WorkspaceSettings from './components/WorkspaceSettings';
 import AuthPage from './components/AuthPage';
 import ConfirmationModal from './components/ConfirmationModal';
-import { Eye, EyeOff, ShieldCheck, CheckCircle, FolderPlus, Loader2, AlertTriangle, RefreshCw } from 'lucide-react';
-import { Transaction, AccountType, BusinessConfig, AppSettings, Project, Client, FixedCostTemplate, Category, Tag, Workspace } from './types';
+import { Eye, EyeOff, Wallet, CheckCircle, LogOut, Loader2, AlertTriangle, RefreshCw, FolderPlus, ShieldCheck } from 'lucide-react';
+import { Transaction, AccountType, BusinessConfig, AppSettings, Project, Client, FixedCostTemplate, Category, Tag } from './types';
 import { useAuth } from './contexts/AuthContext';
-import { transactionService, clientService, projectService, categoryService, tagService, fixedCostService, seedDatabase, workspaceService } from './services/api';
+import { transactionService, clientService, projectService, categoryService, tagService, fixedCostService, seedDatabase } from './services/api';
 import { supabase } from './lib/supabase';
 
 const defaultSettings: AppSettings = {
     personal: {
-        name: 'Workspace Pessoal',
+        name: 'Minha Conta',
         categories: [],
         tags: [],
         cashFlow: { allocations: { workingCapital: 0, operationalReserve: 0 }, workingCapitalPercent: 50 }
     },
     business: {
-        name: 'Workspace Empresarial',
+        name: 'Minha Empresa',
         categories: [],
         tags: [],
         cashFlow: { allocations: { workingCapital: 0, operationalReserve: 0 }, workingCapitalPercent: 50 }
@@ -43,17 +42,7 @@ const App: React.FC = () => {
   const [backgroundSyncing, setBackgroundSyncing] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
 
-  // --- WORKSPACE STATE ---
-  const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
-  const [currentWorkspace, setCurrentWorkspace] = useState<Workspace | null>(null);
-  const [isWorkspaceModalOpen, setIsWorkspaceModalOpen] = useState(false);
-
-  // Permissions based on Role
-  const currentUserRole = currentWorkspace?.role || 'viewer';
-  const isAdmin = currentUserRole === 'owner' || currentUserRole === 'admin';
-  const canEdit = isAdmin; // Viewers cannot edit
-
-  // --- DATA STATE ---
+  // --- STATE MANAGEMENT ---
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [categories, setCategories] = useState<(Category & { scope: string })[]>([]);
   const [tags, setTags] = useState<(Tag & { scope: string })[]>([]);
@@ -67,59 +56,32 @@ const App: React.FC = () => {
   const [valuesVisible, setValuesVisible] = useState(true);
   const [currentView, setCurrentView] = useState('dashboard');
   const [isDarkMode, setIsDarkMode] = useState(false);
+  const [accountType, setAccountType] = useState<AccountType>('personal');
   const [isTransactionModalOpen, setIsTransactionModalOpen] = useState(false);
   const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
   const [modalMode, setModalMode] = useState<'default' | 'cash'>('default');
   const [timeFilter, setTimeFilter] = useState<'week' | 'month' | 'year'>('month');
   
+  // Unified Delete Confirmation State
   const [pendingDelete, setPendingDelete] = useState<{ id: string, type: 'transaction' | 'project' | 'client' | 'cost' } | null>(null);
 
-  // --- WORKSPACE LOADING LOGIC ---
-  useEffect(() => {
-    if (!user || loading) return;
-
-    const initWorkspaces = async () => {
-      try {
-        const list = await workspaceService.listByUser(user.id);
-        
-        if (list.length === 0) {
-          // Auto-create default personal workspace
-          const personal = await workspaceService.create(user.id, 'Meu Espaço Pessoal', 'personal');
-          setWorkspaces([personal]);
-          setCurrentWorkspace(personal);
-          await seedDatabase(user.id, personal.id, 'personal');
-        } else {
-          setWorkspaces(list);
-          // Prefer last accessed or first one
-          setCurrentWorkspace(list[0]); 
-        }
-      } catch (err) {
-        console.error("Failed to init workspaces", err);
-      }
-    };
-    initWorkspaces();
-  }, [user, loading]);
-
-  // --- DATA LOADING (Depends on currentWorkspace) ---
-  const loadWorkspaceData = useCallback(async () => {
-    if (!user || !currentWorkspace) return;
-    
+  // --- DATA LOADING ---
+  const loadAllData = useCallback(async () => {
+    if (!user) return;
     setBackgroundSyncing(true);
     setLoadError(null);
     try {
-      // Seeding check could go here if needed per workspace
-      
-      const wsId = currentWorkspace.id;
+      await seedDatabase(user.id);
 
       const [
         catsRes, tagsRes, txsRes, clientsRes, projectsRes, costsRes
       ] = await Promise.allSettled([
-        categoryService.fetchAll(wsId),
-        tagService.fetchAll(wsId),
-        transactionService.fetchAll(wsId),
-        clientService.fetchAll(wsId),
-        projectService.fetchAll(wsId),
-        fixedCostService.fetchAll(wsId)
+        categoryService.fetchAll(user.id),
+        tagService.fetchAll(user.id),
+        transactionService.fetchAll(user.id),
+        clientService.fetchAll(user.id),
+        projectService.fetchAll(user.id),
+        fixedCostService.fetchAll(user.id)
       ]);
 
       const extract = <T,>(res: PromiseSettledResult<T>, fallback: T): T => 
@@ -136,47 +98,71 @@ const App: React.FC = () => {
 
     } catch (error) {
       console.error("Critical Load Error:", error);
-      setLoadError("Falha ao sincronizar dados do espaço.");
+      setLoadError("Falha ao sincronizar. Tentando novamente...");
     } finally {
       setBackgroundSyncing(false);
       setInitialLoad(false);
     }
-  }, [user, currentWorkspace]);
+  }, [user]);
 
   useEffect(() => {
-    if (currentWorkspace) loadWorkspaceData();
-  }, [currentWorkspace, loadWorkspaceData]);
+    if (user && !loading) loadAllData();
+  }, [user, loading, loadAllData]);
 
-  // Sync settings visual
+  // Sync settings with Categories, Tags AND Metadata (for avatar)
   useEffect(() => {
-    if (!currentWorkspace) return;
+    if (!user) return;
+    
+    // Check for saved avatar in metadata
+    const metaBusinessAvatar = user.user_metadata?.business_avatar_url || undefined;
     
     setAppSettings(prev => ({
-      ...prev,
-      [currentWorkspace.type]: {
-        name: currentWorkspace.name,
-        categories: categories,
-        tags: tags,
-        avatarUrl: currentWorkspace.avatarUrl,
-        // Mock cash flow settings per workspace type (could be saved in workspace metadata)
-        cashFlow: { allocations: { workingCapital: 0, operationalReserve: 0 }, workingCapitalPercent: 50 }
+      personal: {
+        ...prev.personal,
+        name: user.user_metadata?.full_name || 'Pessoal',
+        categories: categories.filter(c => c.scope === 'personal'),
+        tags: tags.filter(t => t.scope === 'personal'),
+      },
+      business: {
+        ...prev.business,
+        name: 'Empresa',
+        categories: categories.filter(c => c.scope === 'business'),
+        tags: tags.filter(t => t.scope === 'business'),
+        avatarUrl: metaBusinessAvatar
       }
     }));
-  }, [categories, tags, currentWorkspace]);
+  }, [categories, tags, user]);
 
-  const handleCreateWorkspace = async (name: string, type: AccountType) => {
-      if (!user) return;
-      const newWs = await workspaceService.create(user.id, name, type);
-      setWorkspaces(prev => [...prev, newWs]);
-      setCurrentWorkspace(newWs);
-      await seedDatabase(user.id, newWs.id, type);
-      setCurrentView('dashboard');
+  const handleUpdateSettings = async (newSettings: AppSettings) => {
+    // Optimistic update
+    setAppSettings(newSettings);
+
+    // Persist special fields (Avatar) to Supabase Metadata
+    if (user) {
+        if (newSettings.business.avatarUrl !== user.user_metadata?.business_avatar_url) {
+            await supabase.auth.updateUser({
+                data: { business_avatar_url: newSettings.business.avatarUrl }
+            });
+        }
+    }
+  };
+
+  const safeExecute = async <T,>(fn: () => Promise<T>): Promise<T | undefined> => {
+    setBackgroundSyncing(true);
+    try {
+      return await fn();
+    } catch (err: any) {
+      console.error(err);
+      return undefined;
+    } finally {
+      setBackgroundSyncing(false);
+    }
   };
 
   // --- CORE SYNC LOGIC ---
 
   const syncProjectToTransaction = async (project: Project) => {
-      if (!user || !currentWorkspace) return;
+      if (!user) return;
       
       const clientName = clients.find(c => c.id === project.clientId)?.name || 'Cliente';
       const txPayload = {
@@ -185,11 +171,10 @@ const App: React.FC = () => {
           date: new Date(project.startDate),
           type: 'income' as const,
           category: 'Projetos',
-          accountId: currentWorkspace.type, // Visual only
-          workspaceId: currentWorkspace.id,
+          accountId: 'business' as AccountType,
           tags: ['projeto'],
           source: clientName,
-          projectId: project.id
+          projectId: project.id // Ensure link
       };
 
       const existingTx = await transactionService.fetchByProjectId(project.id);
@@ -229,34 +214,11 @@ const App: React.FC = () => {
       }
   };
 
-  // --- HANDLERS (With Permission Checks) ---
-
-  const safeExecute = async <T,>(fn: () => Promise<T>): Promise<T | undefined> => {
-    if (!canEdit) {
-        alert("Modo Visualizador: Você não tem permissão para editar.");
-        return undefined;
-    }
-    setBackgroundSyncing(true);
-    try {
-      return await fn();
-    } catch (err: any) {
-      console.error(err);
-      alert(err.message);
-      return undefined;
-    } finally {
-      setBackgroundSyncing(false);
-    }
-  };
+  // --- HANDLERS ---
 
   const handleSaveTransaction = (txData: any, id?: string) => safeExecute(async () => {
-    if (!user || !currentWorkspace) return;
-    // Inject workspace ID
-    const payload = { 
-        ...txData, 
-        date: new Date(txData.date), 
-        accountId: currentWorkspace.type,
-        workspaceId: currentWorkspace.id 
-    };
+    if (!user) return;
+    const payload = { ...txData, date: new Date(txData.date), accountId: accountType };
     
     let savedTx: Transaction;
 
@@ -281,10 +243,9 @@ const App: React.FC = () => {
   });
 
   const handleCreateProject = (projectData: any) => safeExecute(async () => {
-    if(!user || !currentWorkspace) return undefined;
+    if(!user) return undefined;
     
-    const payload = { ...projectData, workspaceId: currentWorkspace.id };
-    const createdProject = await projectService.create(user.id, payload);
+    const createdProject = await projectService.create(user.id, projectData);
     setProjects(prev => [...prev, createdProject]);
     await syncProjectToTransaction(createdProject);
 
@@ -300,8 +261,8 @@ const App: React.FC = () => {
   });
 
   const handleCreateClient = (c: any) => safeExecute(async () => {
-    if(!user || !currentWorkspace) return;
-    const created = await clientService.create(user.id, { ...c, workspaceId: currentWorkspace.id });
+    if(!user) return;
+    const created = await clientService.create(user.id, c);
     setClients(prev => [...prev, created]);
   });
 
@@ -312,8 +273,8 @@ const App: React.FC = () => {
   });
 
   const handleAddCategory = (name: string) => safeExecute(async () => {
-    if(!user || !currentWorkspace) return;
-    const newCat = await categoryService.create(user.id, { id: '', name, type: 'both' }, currentWorkspace.type, currentWorkspace.id);
+    if(!user) return;
+    const newCat = await categoryService.create(user.id, { id: '', name, type: 'both' }, accountType);
     setCategories(prev => [...prev, newCat]);
   });
 
@@ -323,8 +284,8 @@ const App: React.FC = () => {
   });
 
   const handleAddTag = (label: string) => safeExecute(async () => {
-    if(!user || !currentWorkspace) return;
-    const newTag = await tagService.create(user.id, { id: '', label, color: 'blue' }, currentWorkspace.type, currentWorkspace.id);
+    if(!user) return;
+    const newTag = await tagService.create(user.id, { id: '', label, color: 'blue' }, accountType);
     setTags(prev => [...prev, newTag]);
   });
 
@@ -334,13 +295,12 @@ const App: React.FC = () => {
   });
 
   const handleAddFixedCost = (cost: FixedCostTemplate) => safeExecute(async () => {
-    if(!user || !currentWorkspace) return;
-    const created = await fixedCostService.create(user.id, cost, currentWorkspace.id);
+    if(!user) return;
+    const created = await fixedCostService.create(user.id, cost);
     setFixedCosts(prev => [...prev, created]);
   });
 
   const requestDelete = (id: string, type: 'transaction' | 'project' | 'client' | 'cost') => {
-      if (!canEdit) return alert("Acesso negado.");
       if (type === 'transaction') {
           const tx = transactions.find(t => t.id === id);
           if (tx && tx.projectId) {
@@ -379,8 +339,10 @@ const App: React.FC = () => {
             await fixedCostService.delete(id);
             setFixedCosts(prev => prev.filter(c => c.id !== id));
         }
-    } catch (error: any) {
-        alert(error.message);
+    } catch (error) {
+        console.error("Erro fatal ao apagar:", error);
+        alert("Erro: O item não pôde ser apagado. Tente recarregar a página.");
+        await loadAllData(); 
     } finally {
         setPendingDelete(null);
         setIsTransactionModalOpen(false);
@@ -391,22 +353,27 @@ const App: React.FC = () => {
   if (loading || (initialLoad && user)) {
     return (
       <div className="min-h-screen bg-black flex flex-col items-center justify-center gap-4 relative overflow-hidden">
-        <Loader2 className="w-12 h-12 text-white animate-spin mb-4" />
-        <p className="text-slate-400 font-medium animate-pulse">Carregando seus espaços...</p>
+        <div className="absolute top-[-10%] left-[-10%] w-[50vw] h-[50vw] bg-blue-600/20 rounded-full blur-[120px] animate-pulse"></div>
+        <div className="absolute bottom-[-10%] right-[-10%] w-[50vw] h-[50vw] bg-indigo-600/20 rounded-full blur-[120px] animate-pulse delay-1000"></div>
+        
+        <div className="relative z-10 flex flex-col items-center">
+            <Loader2 className="w-12 h-12 text-white animate-spin mb-4" />
+            <p className="text-slate-400 font-medium animate-pulse">Carregando seus dados...</p>
+        </div>
       </div>
     );
   }
 
   if (!session) return <AuthPage />;
-  if (!currentWorkspace) return null;
 
-  const currentSettingsScope = appSettings[currentWorkspace.type];
+  const currentSettingsScope = accountType === 'business' ? appSettings.business : appSettings.personal;
   
-  // Filtering Logic (Client side for view, already filtered by API for workspace)
   const getFilteredTransactions = () => {
+    const accountTxs = transactions.filter(t => t.accountId === accountType);
+    if (['transactions', 'settings', 'business_settings', 'cashflow', 'reports', 'projects'].includes(currentView)) return accountTxs;
+    
     const now = new Date();
-    return transactions.filter(t => {
-      if (currentView === 'transactions') return true; 
+    return accountTxs.filter(t => {
       if (timeFilter === 'year') return t.date.getFullYear() === now.getFullYear();
       if (timeFilter === 'month') return t.date.getMonth() === now.getMonth() && t.date.getFullYear() === now.getFullYear();
       
@@ -420,25 +387,34 @@ const App: React.FC = () => {
   const periodBalance = filteredTransactions.reduce((acc, t) => t.type === 'income' ? acc + t.amount : t.type === 'expense' ? acc - t.amount : acc, 0);
   const totalIncome = filteredTransactions.filter(t => t.type === 'income').reduce((acc, t) => acc + t.amount, 0);
   const totalExpense = filteredTransactions.filter(t => t.type === 'expense').reduce((acc, t) => acc + t.amount, 0);
-  const totalCashBalance = transactions.reduce((acc, t) => t.type === 'income' ? acc + t.amount : acc - t.amount, 0);
+  const totalCashBalance = transactions.filter(t => t.accountId === accountType).reduce((acc, t) => t.type === 'income' ? acc + t.amount : acc - t.amount, 0);
   
+  // --- LOGICA DE CAIXA LIVRE NO DASHBOARD ---
+  // Calculamos quanto do caixa total está livre (descontando reserva de capital de giro)
   const totalFixedCostsMonthly = fixedCosts.reduce((acc, cost) => acc + cost.defaultAmount, 0);
-  const reservePercent = 50;
-  const requiredReserve = currentWorkspace.type === 'business' ? totalFixedCostsMonthly * (reservePercent / 100) : 0;
+  const reservePercent = appSettings.business.cashFlow.workingCapitalPercent || 50;
+  // Se for conta pessoal, não aplica regra de reserva estrita, ou aplica 0
+  const requiredReserve = accountType === 'business' ? totalFixedCostsMonthly * (reservePercent / 100) : 0;
   const freeCash = totalCashBalance - requiredReserve;
   
   const getFilteredProjects = () => {
       const now = new Date();
       return projects.filter(p => {
           const pDate = new Date(p.startDate);
-          if (timeFilter === 'year') return pDate.getFullYear() === now.getFullYear();
-          if (timeFilter === 'month') return pDate.getMonth() === now.getMonth() && pDate.getFullYear() === now.getFullYear();
+          
+          if (timeFilter === 'year') {
+              return pDate.getFullYear() === now.getFullYear();
+          }
+          if (timeFilter === 'month') {
+              return pDate.getMonth() === now.getMonth() && pDate.getFullYear() === now.getFullYear();
+          }
           const start = new Date(now); start.setDate(now.getDate() - now.getDay()); start.setHours(0,0,0,0);
           const end = new Date(start); end.setDate(start.getDate() + 6); end.setHours(23,59,59,999);
           return pDate >= start && pDate <= end;
       });
   };
   const newProjectsCount = getFilteredProjects().length;
+  const projectLabel = timeFilter === 'month' ? 'Neste Mês' : timeFilter === 'year' ? 'Neste Ano' : 'Nesta Semana';
 
   return (
     <div className={`min-h-screen font-sans text-slate-800 dark:text-slate-100 transition-colors duration-500 ${isDarkMode ? 'bg-black' : 'bg-[#F0F2F5]'}`}>
@@ -446,6 +422,8 @@ const App: React.FC = () => {
       {isDarkMode && (
           <div className="fixed inset-0 pointer-events-none overflow-hidden">
               <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-br from-slate-900 via-black to-black opacity-90"></div>
+              <div className="absolute top-[-20%] left-[-10%] w-[60vw] h-[60vw] bg-blue-900/10 rounded-full blur-[150px]"></div>
+              <div className="absolute bottom-[-10%] right-[-10%] w-[60vw] h-[60vw] bg-indigo-900/10 rounded-full blur-[150px]"></div>
           </div>
       )}
 
@@ -453,34 +431,28 @@ const App: React.FC = () => {
           <Header 
             activeView={currentView} onNavigate={setCurrentView}
             isDarkMode={isDarkMode} toggleTheme={() => { setIsDarkMode(!isDarkMode); document.documentElement.classList.toggle('dark'); }}
-            workspaces={workspaces}
-            currentWorkspace={currentWorkspace}
-            onChangeWorkspace={setCurrentWorkspace}
-            onCreateWorkspace={handleCreateWorkspace}
-            onManageMembers={() => setIsWorkspaceModalOpen(true)}
+            accountType={accountType} setAccountType={setAccountType}
             onNewTransaction={() => { setModalMode('default'); setEditingTransaction(null); setIsTransactionModalOpen(true); }}
-            canEdit={canEdit}
+            settings={appSettings}
             onLogout={signOut}
             userEmail={user?.email || ''}
           />
 
           <main className="max-w-[1600px] mx-auto px-4 pt-8 pb-20 space-y-8 animate-slide-up">
-            
-            {/* View Header */}
+            {loadError && (
+              <div className="bg-amber-100 border border-amber-200 text-amber-800 p-4 rounded-xl flex items-center gap-2">
+                <AlertTriangle size={20} /> {loadError}
+              </div>
+            )}
+
             <div className="flex flex-wrap items-center justify-between gap-4">
               <div>
                 <h1 className="text-3xl font-black text-slate-900 dark:text-white tracking-tight animate-in fade-in slide-in-from-left-4 duration-500">
                   {currentView === 'dashboard' ? 'Visão Geral' : currentView === 'transactions' ? 'Transações' : currentView === 'projects' ? 'Projetos' : currentView === 'cashflow' ? 'Fluxo de Caixa' : currentView}
                 </h1>
-                <div className="flex items-center gap-2 mt-1">
-                    <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full border ${currentUserRole === 'owner' ? 'bg-purple-100 text-purple-700 border-purple-200' : currentUserRole === 'admin' ? 'bg-blue-100 text-blue-700 border-blue-200' : 'bg-slate-100 text-slate-600 border-slate-200'}`}>
-                        {currentUserRole === 'owner' ? 'Dono' : currentUserRole === 'admin' ? 'Administrador' : 'Visualizador'}
-                    </span>
-                    {!canEdit && <span className="text-xs text-red-500 font-bold">Modo Leitura</span>}
-                </div>
+                <p className="text-slate-500 dark:text-slate-400 text-sm mt-1 font-medium animate-in fade-in slide-in-from-left-4 duration-700 delay-100">{accountType === 'business' ? 'Perfil Empresarial' : 'Perfil Pessoal'}</p>
               </div>
-              
-              <div className="flex gap-3">
+              <div className="flex gap-3 animate-in fade-in slide-in-from-right-4 duration-500">
                 {(currentView === 'dashboard' || currentView === 'calendar') && (
                   <div className="bg-white dark:bg-white/10 dark:backdrop-blur-md rounded-xl p-1 flex border border-slate-200 dark:border-white/10">
                     {['week', 'month', 'year'].map(t => (
@@ -513,7 +485,7 @@ const App: React.FC = () => {
                         <div className={`text-3xl xl:text-4xl font-black tracking-tight ${freeCash < 0 ? 'text-red-500' : 'text-slate-800 dark:text-white'}`}>
                             {valuesVisible ? `R$ ${freeCash.toLocaleString('pt-BR', { compactDisplay: 'short', notation: 'compact' })}` : '••••'}
                         </div>
-                        {currentWorkspace.type === 'business' && (
+                        {accountType === 'business' && (
                             <div className="mt-2 text-[10px] font-bold text-slate-400">
                                 Total: R$ {totalCashBalance.toLocaleString('pt-BR', { compactDisplay: 'short' })}
                             </div>
@@ -526,11 +498,11 @@ const App: React.FC = () => {
                       </div>
 
                       {/* Novos Projetos - VISÍVEL APENAS PARA CONTA EMPRESARIAL */}
-                      {currentWorkspace.type === 'business' && (
+                      {accountType === 'business' && (
                           <div className="bg-white dark:bg-white/5 dark:backdrop-blur-xl p-6 rounded-3xl shadow-sm border border-slate-200 dark:border-white/10 transition-all hover:scale-[1.01] hover:shadow-md animate-in fade-in zoom-in duration-500 delay-500">
                             <div className="flex items-center gap-2 mb-3 text-purple-600 dark:text-purple-400"><FolderPlus size={20} /><span className="text-xs font-bold uppercase tracking-wider">Novos Projetos</span></div>
                             <div className="text-3xl xl:text-4xl font-black text-slate-800 dark:text-white tracking-tight">{newProjectsCount}</div>
-                            <div className="text-[10px] text-slate-400 mt-1 uppercase font-bold">{timeFilter === 'month' ? 'Neste Mês' : 'Neste Ano'}</div>
+                            <div className="text-[10px] text-slate-400 mt-1 uppercase font-bold">{projectLabel}</div>
                           </div>
                       )}
                   </div>
@@ -551,41 +523,19 @@ const App: React.FC = () => {
                 onCreateClient={handleCreateClient} onUpdateClient={handleUpdateClient}
                 onDeleteProject={(id) => requestDelete(id, 'project')} onDeleteClient={(id) => requestDelete(id, 'client')}
                 isVisible={valuesVisible}
-                canEdit={canEdit}
               />
             )}
 
             {currentView === 'transactions' && (
-              <TransactionsView 
-                transactions={filteredTransactions} 
-                isVisible={valuesVisible} 
-                onEdit={(tx) => { if(canEdit) { setEditingTransaction(tx); setIsTransactionModalOpen(true); } }} 
-                onDelete={(id) => requestDelete(id, 'transaction')} 
-                canEdit={canEdit}
-              />
+              <TransactionsView transactions={filteredTransactions} isVisible={valuesVisible} onEdit={(tx) => { setEditingTransaction(tx); setIsTransactionModalOpen(true); }} onDelete={(id) => requestDelete(id, 'transaction')} />
             )}
 
             {currentView === 'business_settings' && (
-              <BusinessSettings 
-                fixedCosts={fixedCosts} 
-                onAddCost={handleAddFixedCost} 
-                onRemoveCost={async (id) => requestDelete(id, 'cost')} 
-                onGenerateTransaction={(tx) => handleSaveTransaction(tx)} 
-                transactions={transactions} 
-                isVisible={valuesVisible} 
-                canEdit={canEdit}
-              />
+              <BusinessSettings fixedCosts={fixedCosts} onAddCost={handleAddFixedCost} onRemoveCost={async (id) => requestDelete(id, 'cost')} onGenerateTransaction={(tx) => handleSaveTransaction(tx)} transactions={transactions} isVisible={valuesVisible} />
             )}
 
             {currentView === 'settings' && (
-              <SettingsView 
-                settings={appSettings} 
-                onUpdateSettings={() => {}} // Not really used in this refactor, workspace settings are separate
-                onAddCategory={handleAddCategory} onRemoveCategory={handleRemoveCategory} 
-                onAddTag={handleAddTag} onRemoveTag={handleRemoveTag} 
-                currentAccountType={currentWorkspace.type} 
-                canEdit={canEdit}
-              />
+              <SettingsView settings={appSettings} onUpdateSettings={handleUpdateSettings} onAddCategory={handleAddCategory} onRemoveCategory={handleRemoveCategory} onAddTag={handleAddTag} onRemoveTag={handleRemoveTag} currentAccountType={accountType} />
             )}
 
             {currentView === 'calendar' && <CalendarView transactions={filteredTransactions} isVisible={valuesVisible} timeFilter={timeFilter} />}
@@ -593,45 +543,41 @@ const App: React.FC = () => {
             {currentView === 'cashflow' && (
                 <CashFlowView 
                     settings={appSettings} 
-                    onUpdateSettings={() => {}} 
+                    onUpdateSettings={handleUpdateSettings} 
                     transactions={transactions} 
                     fixedCosts={fixedCosts}
                     businessConfig={businessConfig} 
-                    accountType={currentWorkspace.type} 
+                    accountType={accountType} 
                     isVisible={valuesVisible} 
                 />
             )}
             
-            {currentView === 'reports' && <ReportsView transactions={transactions} isVisible={valuesVisible} accountType={currentWorkspace.type} projects={projects} />}
+            {currentView === 'reports' && <ReportsView transactions={transactions} isVisible={valuesVisible} accountType={accountType} projects={projects} />}
 
           </main>
       </div>
 
       <TransactionModal 
-        isOpen={isTransactionModalOpen && canEdit} onClose={() => setIsTransactionModalOpen(false)}
+        isOpen={isTransactionModalOpen} onClose={() => setIsTransactionModalOpen(false)}
         onSave={handleSaveTransaction} onDelete={(id) => requestDelete(id, 'transaction')}
-        initialData={editingTransaction} categories={categories} availableTags={tags} mode={modalMode}
-      />
-
-      <WorkspaceSettings 
-        isOpen={isWorkspaceModalOpen}
-        onClose={() => setIsWorkspaceModalOpen(false)}
-        workspace={currentWorkspace}
-        currentUserRole={currentUserRole}
+        initialData={editingTransaction} categories={currentSettingsScope.categories} availableTags={currentSettingsScope.tags} mode={modalMode}
       />
 
       <ConfirmationModal 
         isOpen={!!pendingDelete}
         onClose={() => setPendingDelete(null)}
         onConfirm={executeDelete}
-        title="Confirmar Exclusão"
-        message="Tem certeza? Esta ação é irreversível."
+        title={pendingDelete?.type === 'project' ? "Apagar Projeto" : pendingDelete?.type === 'transaction' ? "Apagar Transação" : pendingDelete?.type === 'client' ? "Apagar Cliente" : "Apagar Item"}
+        message={
+            pendingDelete?.type === 'project' ? "Esta ação apagará o projeto e a transação financeira vinculada a ele permanentemente." :
+            "Tem certeza que deseja apagar este item permanentemente?"
+        }
       />
 
       {backgroundSyncing && (
         <div className="fixed bottom-6 right-6 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-xl rounded-full px-4 py-2 flex items-center gap-3 animate-in slide-in-from-bottom-2 fade-in z-50">
            <RefreshCw size={14} className="animate-spin text-blue-600 dark:text-blue-400" />
-           <span className="text-xs font-bold text-slate-600 dark:text-slate-300">Sincronizando Espaço...</span>
+           <span className="text-xs font-bold text-slate-600 dark:text-slate-300">Sincronizando...</span>
         </div>
       )}
     </div>

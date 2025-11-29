@@ -1,5 +1,4 @@
 
-
 import React, { useState } from 'react';
 import { Project, Client, Transaction } from '../types';
 import { 
@@ -11,6 +10,7 @@ interface ProjectsViewProps {
   clients: Client[];
   transactions: Transaction[]; 
   
+  // API Callbacks
   onCreateProject: (p: Omit<Project, 'id'>) => Promise<Project | undefined>; 
   onUpdateProject: (id: string, p: Partial<Project>) => Promise<void>;
   onCreateClient: (c: Omit<Client, 'id'>) => Promise<void>;
@@ -19,7 +19,6 @@ interface ProjectsViewProps {
   onDeleteProject: (id: string) => void;
   onDeleteClient: (id: string) => void;
   isVisible: boolean;
-  canEdit: boolean;
 }
 
 const ProjectsView: React.FC<ProjectsViewProps> = ({ 
@@ -32,11 +31,11 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
   onUpdateClient,
   onDeleteProject,
   onDeleteClient,
-  isVisible,
-  canEdit
+  isVisible 
 }) => {
   const [activeTab, setActiveTab] = useState<'projects' | 'clients'>('projects');
   
+  // Modals & Forms
   const [isClientModalOpen, setIsClientModalOpen] = useState(false);
   const [clientForm, setClientForm] = useState({ name: '', phone: '', document: '', email: '' });
   const [editingClient, setEditingClient] = useState<Client | null>(null);
@@ -47,8 +46,8 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
   });
   const [editingProject, setEditingProject] = useState<Project | null>(null);
 
+  // --- Client Logic ---
   const handleOpenClientModal = (client?: Client) => {
-    if (!canEdit) return;
     if (client) {
       setEditingClient(client);
       setClientForm({ name: client.name, phone: client.phone, document: client.document, email: client.email || '' });
@@ -69,8 +68,8 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
     setIsClientModalOpen(false);
   };
 
+  // --- Project Logic ---
   const handleOpenProjectModal = (project?: Project) => {
-    if (!canEdit) return;
     if (project) {
       setEditingProject(project);
       const dateString = project.startDate.toLocaleDateString('en-CA'); 
@@ -145,14 +144,12 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
             </button>
          </div>
          
-         {canEdit && (
-            <button 
-                onClick={() => activeTab === 'projects' ? handleOpenProjectModal() : handleOpenClientModal()}
-                className="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-xl font-bold text-sm flex items-center gap-2 shadow-lg shadow-blue-600/20 transition-all"
-            >
-                <Plus size={18} /> {activeTab === 'projects' ? 'Novo Projeto' : 'Novo Cliente'}
-            </button>
-         )}
+         <button 
+            onClick={() => activeTab === 'projects' ? handleOpenProjectModal() : handleOpenClientModal()}
+            className="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-xl font-bold text-sm flex items-center gap-2 shadow-lg shadow-blue-600/20 transition-all"
+         >
+            <Plus size={18} /> {activeTab === 'projects' ? 'Novo Projeto' : 'Novo Cliente'}
+         </button>
       </div>
 
       {/* --- PROJECTS TAB --- */}
@@ -164,16 +161,14 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
                         <div className="p-5 border-b border-slate-100 dark:border-slate-700/50 bg-slate-50/50 dark:bg-slate-800/50">
                              <div className="flex justify-between items-start mb-2">
                                 <h3 className="font-bold text-lg text-slate-800 dark:text-white line-clamp-1 flex-1 pr-2" title={project.name}>{project.name}</h3>
-                                {canEdit && (
-                                    <div className="flex gap-1 shrink-0">
-                                        <button onClick={() => handleOpenProjectModal(project)} className="p-1.5 rounded-lg text-slate-400 hover:text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors">
-                                            <Edit2 size={16} />
-                                        </button>
-                                        <button onClick={() => onDeleteProject(project.id)} className="p-1.5 rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors">
-                                            <Trash2 size={16} />
-                                        </button>
-                                    </div>
-                                )}
+                                <div className="flex gap-1 shrink-0">
+                                     <button onClick={() => handleOpenProjectModal(project)} className="p-1.5 rounded-lg text-slate-400 hover:text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors">
+                                         <Edit2 size={16} />
+                                     </button>
+                                     <button onClick={() => onDeleteProject(project.id)} className="p-1.5 rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors">
+                                         <Trash2 size={16} />
+                                     </button>
+                                </div>
                              </div>
                              <p className="text-xs font-bold text-slate-500 uppercase tracking-wide flex items-center gap-2">
                                 <Users size={12} className="text-slate-400" /> 
@@ -207,17 +202,15 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
                 );
             })}
             
-            {canEdit && (
-                <button 
-                    onClick={() => handleOpenProjectModal()}
-                    className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border-2 border-dashed border-slate-200 dark:border-slate-700 p-6 flex flex-col items-center justify-center gap-4 text-slate-400 hover:border-blue-500 hover:text-blue-500 transition-all min-h-[250px] group"
-                >
-                    <div className="w-16 h-16 rounded-full bg-slate-50 dark:bg-slate-900 flex items-center justify-center group-hover:bg-blue-50 dark:group-hover:bg-blue-900/20 transition-colors">
-                        <Plus size={32} />
-                    </div>
-                    <span className="font-bold group-hover:scale-105 transition-transform">Novo Projeto</span>
-                </button>
-            )}
+            <button 
+                onClick={() => handleOpenProjectModal()}
+                className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border-2 border-dashed border-slate-200 dark:border-slate-700 p-6 flex flex-col items-center justify-center gap-4 text-slate-400 hover:border-blue-500 hover:text-blue-500 transition-all min-h-[250px] group"
+            >
+                <div className="w-16 h-16 rounded-full bg-slate-50 dark:bg-slate-900 flex items-center justify-center group-hover:bg-blue-50 dark:group-hover:bg-blue-900/20 transition-colors">
+                    <Plus size={32} />
+                </div>
+                <span className="font-bold group-hover:scale-105 transition-transform">Novo Projeto</span>
+            </button>
         </div>
       )}
 
@@ -230,7 +223,7 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
                          <th className="p-4">Nome</th>
                          <th className="p-4">Contato</th>
                          <th className="p-4">Documento</th>
-                         {canEdit && <th className="p-4 text-center">Ações</th>}
+                         <th className="p-4 text-center">Ações</th>
                      </tr>
                  </thead>
                  <tbody className="text-sm">
@@ -246,26 +239,24 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
                              <td className="p-4 text-slate-500 flex items-center gap-2">
                                  <FileText size={14} /> {client.document}
                              </td>
-                             {canEdit && (
-                                <td className="p-4 text-center">
-                                    <div className="flex justify-center gap-2">
-                                        <button onClick={() => handleOpenClientModal(client)} className="text-blue-500 hover:bg-blue-50 p-1.5 rounded"><Edit2 size={16} /></button>
-                                        <button onClick={() => onDeleteClient(client.id)} className="text-red-500 hover:bg-red-50 p-1.5 rounded"><Trash2 size={16} /></button>
-                                    </div>
-                                </td>
-                             )}
+                             <td className="p-4 text-center">
+                                 <div className="flex justify-center gap-2">
+                                     <button onClick={() => handleOpenClientModal(client)} className="text-blue-500 hover:bg-blue-50 p-1.5 rounded"><Edit2 size={16} /></button>
+                                     <button onClick={() => onDeleteClient(client.id)} className="text-red-500 hover:bg-red-50 p-1.5 rounded"><Trash2 size={16} /></button>
+                                 </div>
+                             </td>
                          </tr>
                      ))}
                      {clients.length === 0 && (
-                         <tr><td colSpan={canEdit ? 4 : 3} className="p-12 text-center text-slate-400">Nenhum cliente cadastrado.</td></tr>
+                         <tr><td colSpan={4} className="p-12 text-center text-slate-400">Nenhum cliente cadastrado.</td></tr>
                      )}
                  </tbody>
              </table>
           </div>
       )}
 
-      {/* Modals are conditionally rendered based on canEdit check inside handler functions or here */}
-      {isClientModalOpen && canEdit && (
+      {/* Client Modal */}
+      {isClientModalOpen && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
            <div className="bg-white dark:bg-slate-900 w-full max-w-md rounded-2xl shadow-2xl overflow-hidden flex flex-col">
                <div className="flex items-center justify-between p-4 border-b border-slate-100 dark:border-slate-800">
@@ -280,7 +271,6 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
                        <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Nome Completo</label>
                        <input value={clientForm.name} onChange={e => setClientForm({...clientForm, name: e.target.value})} className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 text-slate-800 dark:text-white outline-none focus:ring-2 focus:ring-blue-500 transition-all" placeholder="Ex: Empresa Ltda" />
                    </div>
-                   {/* Rest of inputs... */}
                    <div className="group relative">
                        <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Telefone</label>
                        <input value={clientForm.phone} onChange={e => setClientForm({...clientForm, phone: e.target.value})} className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 text-slate-800 dark:text-white outline-none focus:ring-2 focus:ring-blue-500 transition-all" placeholder="(00) 00000-0000" />
@@ -303,7 +293,8 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
         </div>
       )}
 
-      {isProjectModalOpen && canEdit && (
+      {/* Project Modal (REDESIGNED) */}
+      {isProjectModalOpen && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
            <div className="bg-white dark:bg-slate-900 w-full max-w-lg rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
                {/* Header */}
@@ -318,6 +309,7 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
                
                {/* Content - Scrollable */}
                <div className="p-6 overflow-y-auto space-y-5 custom-scrollbar">
+                   {/* Name */}
                    <div>
                        <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Nome do Projeto</label>
                        <input 
@@ -329,6 +321,7 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
                        />
                    </div>
                    
+                   {/* Value */}
                    <div>
                         <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Valor do Contrato</label>
                         <div className="relative">
@@ -343,6 +336,7 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
                         </div>
                    </div>
 
+                   {/* Client Select */}
                    <div>
                        <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Cliente Vinculado</label>
                        <div className="relative">
@@ -356,8 +350,10 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
                                {clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                            </select>
                        </div>
+                       <p className="text-[10px] text-slate-400 mt-1 pl-1">*O valor será lançado automaticamente como receita para este cliente.</p>
                    </div>
                    
+                   {/* Dates */}
                    <div className="grid grid-cols-2 gap-4">
                        <div>
                             <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Data Início</label>
@@ -379,6 +375,7 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
                        </div>
                    </div>
                    
+                   {/* Description */}
                    <div>
                        <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Descrição</label>
                        <textarea 
@@ -391,6 +388,7 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
                    </div>
                </div>
                
+               {/* Footer Actions */}
                <div className="p-4 border-t border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-900 flex gap-3">
                    <button 
                         onClick={() => setIsProjectModalOpen(false)} 
