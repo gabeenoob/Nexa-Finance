@@ -34,11 +34,16 @@ const handleError = (error: any, context: string) => {
   console.error(`[API ERROR] ${context}:`, error);
   
   if (error.message?.includes('schema cache') || error.code === 'PGRST204') {
-    throw new Error('ERRO DE CACHE: O banco mudou. Execute "NOTIFY pgrst, \'reload config\';" no SQL Editor.');
+    // Retorna null para sinalizar ao caller que deve usar fallback
+    return null;
   }
   if (error.code === '42703') { 
     console.warn("Erro de coluna ignorado (fallback):", error.message);
-    return;
+    return null;
+  }
+  if (error.code === '42P01') {
+      // Tabela não existe
+      return null;
   }
   if (error.code === '42501') { 
     throw new Error('Permissão negada. Você não tem permissão para realizar esta ação neste espaço.');
@@ -50,11 +55,6 @@ const handleError = (error: any, context: string) => {
     throw new Error('Dados inválidos (UUID incorreto).');
   }
   
-  // Ignore 404 for workspaces table, it means legacy mode
-  if (context === 'listOwnedWorkspaces' && error.code === '404') {
-      throw error; // Rethrow to let App.tsx handle legacy fallback
-  }
-
   throw new Error(error.message || 'Erro desconhecido na API.');
 };
 
@@ -66,28 +66,40 @@ export const workspaceService = {
     // Busca workspaces onde sou dono OU onde estou na lista de membros
     
     // 1. Workspaces que sou dono
-    const { data: owned, error: ownerError } = await supabase
-        .from('workspaces')
-        .select('*')
-        .eq('owner_id', userId);
+    let owned: any[] = [];
+    try {
+        const { data, error: ownerError } = await supabase
+            .from('workspaces')
+            .select('*')
+            .eq('owner_id', userId);
 
-    if (ownerError) handleError(ownerError, 'listOwnedWorkspaces');
+        if (ownerError) {
+             // Se der erro (ex: tabela não existe), assumimos array vazio para triggerar modo legado
+             console.warn("Workspaces table check failed, defaulting to empty/legacy.");
+             owned = [];
+        } else {
+             owned = data || [];
+        }
+    } catch (e) {
+        owned = [];
+    }
 
     // 2. Workspaces que sou membro
-    // Wrap in try-catch in case workspace_members table doesn't exist either
-    let memberOf = [];
+    let memberOf: any[] = [];
     try {
         const { data, error: memberError } = await supabase
             .from('workspace_members')
             .select('workspace_id, role, workspaces(*)')
-            .eq('email', email); // Usamos email para vincular convites
+            .eq('email', email); 
         
-        if (memberError && memberError.code !== '42P01') { // Ignore if table doesn't exist
-             handleError(memberError, 'listMemberWorkspaces');
+        if (memberError) {
+             console.warn("Member workspaces check failed.");
+             memberOf = [];
+        } else {
+             memberOf = data || [];
         }
-        memberOf = data || [];
     } catch (e) {
-        console.warn("Could not load member workspaces, likely missing table.");
+        memberOf = [];
     }
 
     // Combinar e dedublicar
@@ -95,7 +107,7 @@ export const workspaceService = {
     const ids = new Set();
 
     // Adiciona Owned (Role = Owner)
-    owned?.forEach((w: any) => {
+    owned.forEach((w: any) => {
         if (!ids.has(w.id)) {
             workspaces.push({
                 id: w.id,
@@ -109,7 +121,7 @@ export const workspaceService = {
     });
 
     // Adiciona MemberOf
-    memberOf?.forEach((m: any) => {
+    memberOf.forEach((m: any) => {
         const w = m.workspaces;
         if (w && !ids.has(w.id)) {
             workspaces.push({

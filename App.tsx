@@ -94,14 +94,14 @@ const App: React.FC = () => {
           
           if (list.length === 0) {
               try {
-                  // Create default Personal Workspace if list is empty but table exists
+                  // If we are here, either the table is empty OR the table doesn't exist and listByUser returned [] safely
+                  // We try to create. If the table doesn't exist, this will throw, catching below.
                   const def = await workspaceService.create(user.id, 'Meu Espaço Pessoal', 'personal');
                   setWorkspaces([{ ...def, role: 'owner' }]);
                   setCurrentWorkspace({ ...def, role: 'owner' });
               } catch (createError) {
-                   // Fallback if creation fails (e.g. table doesn't exist)
-                   console.warn("Failed to create default workspace, using legacy mode.");
-                   throw createError;
+                   // Creation failed, likely table missing. Fallback to Legacy.
+                   throw new Error("Legacy Mode");
               }
           } else {
               setWorkspaces(list);
@@ -110,18 +110,20 @@ const App: React.FC = () => {
               }
           }
       } catch (error) {
-          console.warn("Failed to load workspaces (Legacy Mode Activated)", error);
+          console.warn("Using Legacy Mode (Database not migrated or Error)", error);
           // FALLBACK: Legacy Mode (Database doesn't have workspace tables yet)
-          // We create a "Virtual" workspace to allow the app to function with old data
           const legacyWorkspace: Workspace & { role: Role } = {
               id: 'legacy',
-              name: 'Meu Espaço',
+              name: 'Meu Espaço (Legado)',
               type: 'personal',
               ownerId: user.id,
               role: 'owner'
           };
           setWorkspaces([legacyWorkspace]);
           setCurrentWorkspace(legacyWorkspace);
+      } finally {
+          // IMPORTANT: Ensure loading stops
+          setInitialLoad(false); 
       }
   };
 
