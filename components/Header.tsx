@@ -1,4 +1,5 @@
 
+
 import React, { useState, useEffect, useRef } from 'react';
 import { 
   Settings, 
@@ -90,6 +91,7 @@ const Header: React.FC<HeaderProps> = ({
   ];
 
   const currentName = accountType === 'business' ? settings.business.name : settings.personal.name;
+  const businessAvatar = settings.business.avatarUrl;
 
   return (
     <header className="sticky top-0 z-50 px-2 md:px-4 py-3 transition-colors duration-200">
@@ -102,8 +104,16 @@ const Header: React.FC<HeaderProps> = ({
               onClick={() => setIsProfileOpen(!isProfileOpen)}
               className={`flex items-center gap-3 pl-1 pr-3 py-1.5 rounded-xl transition-all border border-transparent ${isProfileOpen ? 'bg-slate-100 dark:bg-slate-800' : 'hover:bg-slate-100 dark:hover:bg-slate-800 hover:border-slate-200 dark:hover:border-slate-700'}`}
             >
-              <div className={`w-10 h-10 rounded-xl flex items-center justify-center shadow-lg transition-transform ${accountType === 'business' ? 'bg-gradient-to-br from-indigo-600 to-violet-600' : 'bg-gradient-to-br from-blue-500 to-cyan-500'}`}>
-                {accountType === 'business' ? <Briefcase className="w-5 h-5 text-white" /> : <User className="w-5 h-5 text-white" />}
+              <div className={`w-10 h-10 rounded-xl flex items-center justify-center shadow-lg transition-transform overflow-hidden ${accountType === 'business' && !businessAvatar ? 'bg-gradient-to-br from-indigo-600 to-violet-600' : accountType === 'personal' ? 'bg-gradient-to-br from-blue-500 to-cyan-500' : ''}`}>
+                {accountType === 'business' ? (
+                  businessAvatar ? (
+                    <img src={businessAvatar} alt="Logo" className="w-full h-full object-cover" />
+                  ) : (
+                    <Briefcase className="w-5 h-5 text-white" />
+                  )
+                ) : (
+                  <User className="w-5 h-5 text-white" />
+                )}
               </div>
               <div className="flex flex-col items-start text-left">
                 <span className="font-bold text-sm text-slate-800 dark:text-white leading-tight max-w-[120px] truncate">
@@ -141,8 +151,12 @@ const Header: React.FC<HeaderProps> = ({
                     onClick={() => handleSwitchAccount('business')}
                     className={`w-full p-3 flex items-center gap-4 rounded-xl transition-all group/item ${accountType === 'business' ? 'bg-violet-50 dark:bg-violet-900/20 border border-violet-100 dark:border-violet-800' : 'hover:bg-slate-50 dark:hover:bg-slate-800 border border-transparent'}`}
                   >
-                     <div className={`p-2.5 rounded-xl text-white shadow-md transition-all ${accountType === 'business' ? 'bg-violet-600' : 'bg-slate-300 dark:bg-slate-700 group-hover/item:bg-violet-500'}`}>
-                      <Briefcase size={18} />
+                     <div className={`p-2.5 rounded-xl text-white shadow-md transition-all overflow-hidden flex items-center justify-center ${accountType === 'business' && !businessAvatar ? 'bg-violet-600' : 'bg-slate-300 dark:bg-slate-700 group-hover/item:bg-violet-500'}`}>
+                      {businessAvatar ? (
+                        <img src={businessAvatar} alt="Logo" className="w-full h-full object-cover" />
+                      ) : (
+                        <Briefcase size={18} />
+                      )}
                     </div>
                     <div className="text-left">
                       <p className={`text-sm font-bold ${accountType === 'business' ? 'text-violet-700 dark:text-violet-300' : 'text-slate-700 dark:text-slate-300'}`}>Empresarial</p>

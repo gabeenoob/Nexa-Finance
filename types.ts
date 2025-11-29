@@ -1,4 +1,5 @@
 
+
 export type AccountType = 'personal' | 'business';
 
 export interface Tag {
@@ -79,6 +80,7 @@ export interface AccountSettings {
   categories: Category[];
   tags: Tag[];
   cashFlow: CashFlowConfig;
+  avatarUrl?: string; // URL for the profile image/logo
 }
 
 export interface AppSettings {

@@ -1,7 +1,8 @@
 
+
 import React, { useState } from 'react';
 import { AppSettings, AccountType } from '../types';
-import { Plus, Trash2, Tag as TagIcon, Layers, User, Briefcase, AlertCircle, Settings } from 'lucide-react';
+import { Plus, Trash2, Tag as TagIcon, Layers, User, Briefcase, AlertCircle, Settings, Image } from 'lucide-react';
 
 interface SettingsViewProps {
   settings: AppSettings;
@@ -30,6 +31,14 @@ const SettingsView: React.FC<SettingsViewProps> = ({
 
   const handleUpdateName = (value: string) => {
     const updatedScope = { ...getCurrentScope(), name: value };
+    onUpdateSettings({
+      ...settings,
+      [currentAccountType]: updatedScope
+    });
+  };
+
+  const handleUpdateAvatar = (url: string) => {
+    const updatedScope = { ...getCurrentScope(), avatarUrl: url };
     onUpdateSettings({
       ...settings,
       [currentAccountType]: updatedScope
@@ -98,16 +107,47 @@ const SettingsView: React.FC<SettingsViewProps> = ({
         {activeTab === 'general' && (
           <div className="max-w-xl space-y-8">
             <div>
-                <h3 className="text-xl font-bold text-slate-800 dark:text-white mb-4">Perfil e Nomes</h3>
-                <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-2">
-                    {currentAccountType === 'business' ? 'Nome da Empresa' : 'Nome Pessoal'}
-                </label>
-                <input 
-                    type="text"
-                    value={currentData.name}
-                    onChange={(e) => handleUpdateName(e.target.value)}
-                    className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-600 rounded-lg px-4 py-3 text-slate-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
+                <h3 className="text-xl font-bold text-slate-800 dark:text-white mb-4">Perfil e Identidade</h3>
+                
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-2">
+                        {currentAccountType === 'business' ? 'Nome da Empresa' : 'Nome Pessoal'}
+                    </label>
+                    <input 
+                        type="text"
+                        value={currentData.name}
+                        onChange={(e) => handleUpdateName(e.target.value)}
+                        className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-600 rounded-lg px-4 py-3 text-slate-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+
+                  {currentAccountType === 'business' && (
+                    <div>
+                      <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-2">
+                          Logo da Empresa (URL)
+                      </label>
+                      <div className="flex gap-4">
+                        <div className="relative flex-1">
+                          <Image className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 w-5 h-5" />
+                          <input 
+                              type="text"
+                              value={currentData.avatarUrl || ''}
+                              onChange={(e) => handleUpdateAvatar(e.target.value)}
+                              placeholder="https://sua-empresa.com/logo.png"
+                              className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-600 rounded-lg pl-10 pr-4 py-3 text-slate-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          />
+                        </div>
+                        {currentData.avatarUrl && (
+                          <div className="w-12 h-12 rounded-lg border border-slate-200 dark:border-slate-700 overflow-hidden bg-white shrink-0">
+                             <img src={currentData.avatarUrl} alt="Logo Preview" className="w-full h-full object-cover" />
+                          </div>
+                        )}
+                      </div>
+                      <p className="text-[10px] text-slate-400 mt-1">Cole o link direto da imagem da sua logo.</p>
+                    </div>
+                  )}
+                </div>
             </div>
 
             {currentAccountType === 'business' && (

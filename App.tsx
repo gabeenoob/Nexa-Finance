@@ -1,4 +1,5 @@
 
+
 import React, { useState, useEffect, useCallback } from 'react';
 import Header from './components/Header';
 import BalanceCard from './components/BalanceCard';
@@ -18,6 +19,7 @@ import { Eye, EyeOff, Wallet, CheckCircle, LogOut, Loader2, AlertTriangle, Refre
 import { Transaction, AccountType, BusinessConfig, AppSettings, Project, Client, FixedCostTemplate, Category, Tag } from './types';
 import { useAuth } from './contexts/AuthContext';
 import { transactionService, clientService, projectService, categoryService, tagService, fixedCostService, seedDatabase } from './services/api';
+import { supabase } from './lib/supabase';
 
 const defaultSettings: AppSettings = {
     personal: {
@@ -107,8 +109,13 @@ const App: React.FC = () => {
     if (user && !loading) loadAllData();
   }, [user, loading, loadAllData]);
 
+  // Sync settings with Categories, Tags AND Metadata (for avatar)
   useEffect(() => {
     if (!user) return;
+    
+    // Check for saved avatar in metadata
+    const metaBusinessAvatar = user.user_metadata?.business_avatar_url || undefined;
+    
     setAppSettings(prev => ({
       personal: {
         ...prev.personal,
@@ -121,9 +128,24 @@ const App: React.FC = () => {
         name: 'Empresa',
         categories: categories.filter(c => c.scope === 'business'),
         tags: tags.filter(t => t.scope === 'business'),
+        avatarUrl: metaBusinessAvatar
       }
     }));
   }, [categories, tags, user]);
+
+  const handleUpdateSettings = async (newSettings: AppSettings) => {
+    // Optimistic update
+    setAppSettings(newSettings);
+
+    // Persist special fields (Avatar) to Supabase Metadata
+    if (user) {
+        if (newSettings.business.avatarUrl !== user.user_metadata?.business_avatar_url) {
+            await supabase.auth.updateUser({
+                data: { business_avatar_url: newSettings.business.avatarUrl }
+            });
+        }
+    }
+  };
 
   const safeExecute = async <T,>(fn: () => Promise<T>): Promise<T | undefined> => {
     setBackgroundSyncing(true);
@@ -513,7 +535,7 @@ const App: React.FC = () => {
             )}
 
             {currentView === 'settings' && (
-              <SettingsView settings={appSettings} onUpdateSettings={setAppSettings} onAddCategory={handleAddCategory} onRemoveCategory={handleRemoveCategory} onAddTag={handleAddTag} onRemoveTag={handleRemoveTag} currentAccountType={accountType} />
+              <SettingsView settings={appSettings} onUpdateSettings={handleUpdateSettings} onAddCategory={handleAddCategory} onRemoveCategory={handleRemoveCategory} onAddTag={handleAddTag} onRemoveTag={handleRemoveTag} currentAccountType={accountType} />
             )}
 
             {currentView === 'calendar' && <CalendarView transactions={filteredTransactions} isVisible={valuesVisible} timeFilter={timeFilter} />}
@@ -521,7 +543,7 @@ const App: React.FC = () => {
             {currentView === 'cashflow' && (
                 <CashFlowView 
                     settings={appSettings} 
-                    onUpdateSettings={setAppSettings} 
+                    onUpdateSettings={handleUpdateSettings} 
                     transactions={transactions} 
                     fixedCosts={fixedCosts}
                     businessConfig={businessConfig} 

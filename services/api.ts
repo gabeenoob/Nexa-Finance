@@ -59,18 +59,26 @@ export const seedDatabase = async (userId: string) => {
     const { count } = await supabase.from('categories').select('*', { count: 'exact', head: true }).eq('user_id', userId);
     if (count && count > 0) return;
 
+    // Categorias Padrão Minimalistas
     await supabase.from('categories').insert([
-        { user_id: userId, name: 'Alimentação', type: 'expense', scope: 'personal' },
+        // Pessoal
         { user_id: userId, name: 'Moradia', type: 'expense', scope: 'personal' },
-        { user_id: userId, name: 'Salário', type: 'income', scope: 'personal' },
+        { user_id: userId, name: 'Alimentação', type: 'expense', scope: 'personal' },
+        { user_id: userId, name: 'Lazer', type: 'expense', scope: 'personal' },
+        { user_id: userId, name: 'Investimento', type: 'expense', scope: 'personal' },
+        
+        // Empresarial
         { user_id: userId, name: 'Vendas', type: 'income', scope: 'business' },
-        { user_id: userId, name: 'Operacional', type: 'expense', scope: 'business' },
         { user_id: userId, name: 'Projetos', type: 'income', scope: 'business' },
-        { user_id: userId, name: 'Custos Fixos', type: 'expense', scope: 'business' }
+        { user_id: userId, name: 'Custos Fixos', type: 'expense', scope: 'business' },
+        { user_id: userId, name: 'Operacional', type: 'expense', scope: 'business' }
     ]);
     
+    // Tags Padrão Minimalistas
     await supabase.from('tags').insert([
-        { user_id: userId, label: 'Urgente', color: 'red', scope: 'business' }
+        { user_id: userId, label: 'Urgente', color: 'red', scope: 'business' },
+        { user_id: userId, label: 'Recorrente', color: 'blue', scope: 'business' },
+        { user_id: userId, label: 'Pago', color: 'green', scope: 'business' }
     ]);
   } catch (e) {
     console.warn("Erro ao semear banco:", e);
