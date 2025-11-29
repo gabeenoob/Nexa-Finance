@@ -1,4 +1,5 @@
 
+
 import React from 'react';
 import { Transaction } from '../types';
 import { ArrowUpCircle, ArrowDownCircle, ArrowRightLeft, MapPin, Hash, Pencil, Trash2 } from 'lucide-react';
@@ -8,9 +9,10 @@ interface TransactionsViewProps {
   isVisible: boolean;
   onEdit: (tx: Transaction) => void;
   onDelete: (id: string) => void;
+  canEdit: boolean;
 }
 
-const TransactionsView: React.FC<TransactionsViewProps> = ({ transactions, isVisible, onEdit, onDelete }) => {
+const TransactionsView: React.FC<TransactionsViewProps> = ({ transactions, isVisible, onEdit, onDelete, canEdit }) => {
   const sorted = [...transactions].sort((a,b) => b.date.getTime() - a.date.getTime());
 
   return (
@@ -30,7 +32,7 @@ const TransactionsView: React.FC<TransactionsViewProps> = ({ transactions, isVis
               <th className="p-4">Data/Hora</th>
               <th className="p-4">Tags</th>
               <th className="p-4 text-right">Valor</th>
-              <th className="p-4 rounded-tr-lg text-center">Ações</th>
+              {canEdit && <th className="p-4 rounded-tr-lg text-center">Ações</th>}
             </tr>
           </thead>
           <tbody className="text-sm">
@@ -73,27 +75,29 @@ const TransactionsView: React.FC<TransactionsViewProps> = ({ transactions, isVis
                 }`}>
                   {isVisible ? `R$ ${tx.amount.toLocaleString('pt-BR', {minimumFractionDigits: 2})}` : '••••••'}
                 </td>
-                <td className="p-4">
-                    <div className="flex items-center justify-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <button 
-                        onClick={() => onEdit(tx)}
-                        className="p-1.5 text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded transition-colors"
-                        title="Editar"
-                      >
-                          <Pencil size={16} />
-                      </button>
-                      <button 
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          onDelete(tx.id); // Chama direto o pai (App.tsx), sem modal local
-                        }}
-                        className="p-1.5 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/30 rounded transition-colors"
-                        title="Excluir"
-                      >
-                          <Trash2 size={16} />
-                      </button>
-                    </div>
-                </td>
+                {canEdit && (
+                    <td className="p-4">
+                        <div className="flex items-center justify-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <button 
+                            onClick={() => onEdit(tx)}
+                            className="p-1.5 text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded transition-colors"
+                            title="Editar"
+                        >
+                            <Pencil size={16} />
+                        </button>
+                        <button 
+                            onClick={(e) => {
+                            e.stopPropagation();
+                            onDelete(tx.id); 
+                            }}
+                            className="p-1.5 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/30 rounded transition-colors"
+                            title="Excluir"
+                        >
+                            <Trash2 size={16} />
+                        </button>
+                        </div>
+                    </td>
+                )}
               </tr>
             ))}
           </tbody>

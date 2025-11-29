@@ -2,6 +2,26 @@
 
 export type AccountType = 'personal' | 'business';
 
+export type Role = 'owner' | 'admin' | 'viewer';
+
+export interface Workspace {
+  id: string;
+  name: string;
+  type: AccountType;
+  ownerId: string;
+  avatarUrl?: string;
+  role?: Role; // Current user's role in this workspace
+}
+
+export interface WorkspaceMember {
+  id: string;
+  userId: string;
+  email: string;
+  role: Role;
+  fullName?: string;
+  avatarUrl?: string;
+}
+
 export interface Tag {
   id: string;
   label: string;
@@ -29,7 +49,8 @@ export interface Transaction {
   };
   source?: string; 
   destination?: string;
-  accountId: AccountType;
+  accountId: AccountType; // Mantido para compatibilidade visual, mas agora subordinado ao Workspace
+  workspaceId: string;
   projectId?: string; // Linked Project ID
 }
 

@@ -12,6 +12,7 @@ interface SettingsViewProps {
   onAddTag: (label: string) => Promise<void>;
   onRemoveTag: (id: string) => Promise<void>;
   currentAccountType: AccountType;
+  canEdit: boolean;
 }
 
 const SettingsView: React.FC<SettingsViewProps> = ({ 
@@ -21,7 +22,8 @@ const SettingsView: React.FC<SettingsViewProps> = ({
   onRemoveCategory,
   onAddTag,
   onRemoveTag,
-  currentAccountType
+  currentAccountType,
+  canEdit
 }) => {
   const [activeTab, setActiveTab] = useState<'general' | 'categories' | 'tags'>('general');
   const [newCategory, setNewCategory] = useState('');
@@ -30,6 +32,7 @@ const SettingsView: React.FC<SettingsViewProps> = ({
   const getCurrentScope = () => currentAccountType === 'business' ? settings.business : settings.personal;
 
   const handleUpdateName = (value: string) => {
+    if(!canEdit) return;
     const updatedScope = { ...getCurrentScope(), name: value };
     onUpdateSettings({
       ...settings,
@@ -38,6 +41,7 @@ const SettingsView: React.FC<SettingsViewProps> = ({
   };
 
   const handleUpdateAvatar = (url: string) => {
+    if(!canEdit) return;
     const updatedScope = { ...getCurrentScope(), avatarUrl: url };
     onUpdateSettings({
       ...settings,
@@ -46,6 +50,7 @@ const SettingsView: React.FC<SettingsViewProps> = ({
   };
 
   const handleUpdateWorkingCapitalPercent = (value: number) => {
+      if(!canEdit) return;
       const updatedScope = { ...getCurrentScope() };
       updatedScope.cashFlow.workingCapitalPercent = value;
       onUpdateSettings({
@@ -55,13 +60,13 @@ const SettingsView: React.FC<SettingsViewProps> = ({
   }
 
   const handleAddCat = async () => {
-    if (!newCategory.trim()) return;
+    if (!newCategory.trim() || !canEdit) return;
     await onAddCategory(newCategory);
     setNewCategory('');
   };
 
   const handleAddTg = async () => {
-    if (!newTag.trim()) return;
+    if (!newTag.trim() || !canEdit) return;
     await onAddTag(newTag);
     setNewTag('');
   };
@@ -79,6 +84,7 @@ const SettingsView: React.FC<SettingsViewProps> = ({
                 {currentAccountType === 'business' ? <Briefcase size={12} /> : <User size={12} />}
                 {currentAccountType === 'business' ? 'Empresarial' : 'Pessoal'}
             </div>
+            {!canEdit && <p className="text-xs text-red-500 font-bold mt-2">Apenas Leitura</p>}
         </div>
         
         <button 
@@ -118,7 +124,8 @@ const SettingsView: React.FC<SettingsViewProps> = ({
                         type="text"
                         value={currentData.name}
                         onChange={(e) => handleUpdateName(e.target.value)}
-                        className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-600 rounded-lg px-4 py-3 text-slate-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        disabled={!canEdit}
+                        className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-600 rounded-lg px-4 py-3 text-slate-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
                     />
                   </div>
 
@@ -134,8 +141,9 @@ const SettingsView: React.FC<SettingsViewProps> = ({
                               type="text"
                               value={currentData.avatarUrl || ''}
                               onChange={(e) => handleUpdateAvatar(e.target.value)}
+                              disabled={!canEdit}
                               placeholder="https://sua-empresa.com/logo.png"
-                              className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-600 rounded-lg pl-10 pr-4 py-3 text-slate-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                              className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-600 rounded-lg pl-10 pr-4 py-3 text-slate-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
                           />
                         </div>
                         {currentData.avatarUrl && (
@@ -144,7 +152,6 @@ const SettingsView: React.FC<SettingsViewProps> = ({
                           </div>
                         )}
                       </div>
-                      <p className="text-[10px] text-slate-400 mt-1">Cole o link direto da imagem da sua logo.</p>
                     </div>
                   )}
                 </div>
@@ -168,50 +175,44 @@ const SettingsView: React.FC<SettingsViewProps> = ({
                             max="100" 
                             step="5"
                             value={currentData.cashFlow.workingCapitalPercent || 50}
+                            disabled={!canEdit}
                             onChange={(e) => handleUpdateWorkingCapitalPercent(Number(e.target.value))}
-                            className="w-full h-2 bg-slate-200 dark:bg-slate-700 rounded-lg appearance-none cursor-pointer accent-blue-600"
+                            className="w-full h-2 bg-slate-200 dark:bg-slate-700 rounded-lg appearance-none cursor-pointer accent-blue-600 disabled:opacity-50"
                         />
-                        <div className="flex justify-between text-xs text-slate-400 font-bold uppercase">
-                            <span>Mínimo (10%)</span>
-                            <span>Padrão (50%)</span>
-                            <span>Total (100%)</span>
-                        </div>
                     </div>
                 </div>
             )}
-
-            <div className="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-xl text-blue-700 dark:text-blue-300 text-sm flex items-center gap-3 border border-blue-100 dark:border-blue-800">
-              <AlertCircle size={20} />
-              <span>Você está editando as configurações da conta <strong>{currentAccountType === 'business' ? 'Empresarial' : 'Pessoal'}</strong>.</span>
-            </div>
           </div>
         )}
 
         {activeTab === 'categories' && (
           <div className="max-w-xl space-y-6">
-             <h3 className="text-xl font-bold text-slate-800 dark:text-white">Categorias ({currentAccountType === 'business' ? 'Empresarial' : 'Pessoal'})</h3>
-             <p className="text-slate-500 text-sm">Adicione categorias para organizar suas transações.</p>
-
-             <div className="flex gap-2">
-               <input 
-                  type="text"
-                  placeholder="Nova categoria..."
-                  value={newCategory}
-                  onChange={(e) => setNewCategory(e.target.value)}
-                  className="flex-1 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-600 rounded-lg px-4 py-2 text-slate-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-               />
-               <button onClick={handleAddCat} className="bg-blue-600 text-white px-4 py-2 rounded-lg font-bold hover:bg-blue-700 transition-colors">
-                 <Plus size={20} />
-               </button>
-             </div>
+             <h3 className="text-xl font-bold text-slate-800 dark:text-white">Categorias</h3>
+             
+             {canEdit && (
+                <div className="flex gap-2">
+                <input 
+                    type="text"
+                    placeholder="Nova categoria..."
+                    value={newCategory}
+                    onChange={(e) => setNewCategory(e.target.value)}
+                    className="flex-1 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-600 rounded-lg px-4 py-2 text-slate-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+                <button onClick={handleAddCat} className="bg-blue-600 text-white px-4 py-2 rounded-lg font-bold hover:bg-blue-700 transition-colors">
+                    <Plus size={20} />
+                </button>
+                </div>
+             )}
 
              <div className="space-y-2">
                {currentData.categories.map(cat => (
                  <div key={cat.id} className="flex justify-between items-center p-3 bg-slate-50 dark:bg-slate-900/50 rounded-lg group hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors border border-slate-100 dark:border-slate-700">
                    <span className="font-medium text-slate-700 dark:text-slate-300">{cat.name}</span>
-                   <button onClick={() => onRemoveCategory(cat.id)} className="text-slate-400 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity">
-                     <Trash2 size={16} />
-                   </button>
+                   {canEdit && (
+                    <button onClick={() => onRemoveCategory(cat.id)} className="text-slate-400 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <Trash2 size={16} />
+                    </button>
+                   )}
                  </div>
                ))}
                {currentData.categories.length === 0 && (
@@ -223,29 +224,32 @@ const SettingsView: React.FC<SettingsViewProps> = ({
 
         {activeTab === 'tags' && (
           <div className="max-w-xl space-y-6">
-             <h3 className="text-xl font-bold text-slate-800 dark:text-white">Tags ({currentAccountType === 'business' ? 'Empresarial' : 'Pessoal'})</h3>
-             <p className="text-slate-500 text-sm">Tags ajudam a filtrar transações específicas.</p>
-
-             <div className="flex gap-2">
-               <input 
-                  type="text"
-                  placeholder="Nova tag..."
-                  value={newTag}
-                  onChange={(e) => setNewTag(e.target.value)}
-                  className="flex-1 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-600 rounded-lg px-4 py-2 text-slate-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-               />
-               <button onClick={handleAddTg} className="bg-blue-600 text-white px-4 py-2 rounded-lg font-bold hover:bg-blue-700 transition-colors">
-                 <Plus size={20} />
-               </button>
-             </div>
+             <h3 className="text-xl font-bold text-slate-800 dark:text-white">Tags</h3>
+             
+             {canEdit && (
+                <div className="flex gap-2">
+                <input 
+                    type="text"
+                    placeholder="Nova tag..."
+                    value={newTag}
+                    onChange={(e) => setNewTag(e.target.value)}
+                    className="flex-1 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-600 rounded-lg px-4 py-2 text-slate-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+                <button onClick={handleAddTg} className="bg-blue-600 text-white px-4 py-2 rounded-lg font-bold hover:bg-blue-700 transition-colors">
+                    <Plus size={20} />
+                </button>
+                </div>
+             )}
 
              <div className="flex flex-wrap gap-2">
                {currentData.tags.map(tag => (
                  <div key={tag.id} className="flex items-center gap-2 px-3 py-1.5 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 rounded-full text-sm font-bold group border border-blue-100 dark:border-blue-800">
                    <span>#{tag.label}</span>
-                   <button onClick={() => onRemoveTag(tag.id)} className="hover:text-red-500 opacity-50 group-hover:opacity-100 transition-opacity">
-                     <Trash2 size={12} />
-                   </button>
+                   {canEdit && (
+                    <button onClick={() => onRemoveTag(tag.id)} className="hover:text-red-500 opacity-50 group-hover:opacity-100 transition-opacity">
+                        <Trash2 size={12} />
+                    </button>
+                   )}
                  </div>
                ))}
                {currentData.tags.length === 0 && (
