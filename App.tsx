@@ -204,8 +204,10 @@ const App: React.FC = () => {
       if (original?.projectId) {
           payload.projectId = original.projectId;
       }
+
       savedTx = await transactionService.update(id, payload);
       setTransactions(prev => prev.map(t => t.id === id ? savedTx : t));
+      
       if (savedTx.projectId) {
           await syncTransactionToProject(savedTx);
       }
@@ -219,18 +221,25 @@ const App: React.FC = () => {
 
   const handleCreateProject = (projectData: any) => safeExecute(async () => {
     if(!user) return undefined;
+    
     const createdProject = await projectService.create(user.id, projectData);
     setProjects(prev => [...prev, createdProject]);
+
     await syncProjectToTransaction(createdProject);
+
     return createdProject;
   });
 
   const handleUpdateProject = (id: string, projectData: any) => safeExecute(async () => {
     if(!user) return;
+    
     const updatedProject = await projectService.update(id, projectData);
     setProjects(prev => prev.map(proj => proj.id === id ? updatedProject : proj));
+
     await syncProjectToTransaction(updatedProject);
   });
+
+  // --- OTHER HANDLERS ---
 
   const handleCreateClient = (c: any) => safeExecute(async () => {
     if(!user) return;
@@ -299,6 +308,7 @@ const App: React.FC = () => {
                  await transactionService.delete(linkedTx.id);
                  setTransactions(prev => prev.filter(t => t.id !== linkedTx.id));
             }
+
             await projectService.delete(id);
             setProjects(prev => prev.filter(p => p.id !== id));
         } 
@@ -326,6 +336,7 @@ const App: React.FC = () => {
       <div className="min-h-screen bg-black flex flex-col items-center justify-center gap-4 relative overflow-hidden">
         <div className="absolute top-[-10%] left-[-10%] w-[50vw] h-[50vw] bg-blue-600/20 rounded-full blur-[120px] animate-pulse"></div>
         <div className="absolute bottom-[-10%] right-[-10%] w-[50vw] h-[50vw] bg-indigo-600/20 rounded-full blur-[120px] animate-pulse delay-1000"></div>
+        
         <div className="relative z-10 flex flex-col items-center">
             <Loader2 className="w-12 h-12 text-white animate-spin mb-4" />
             <p className="text-slate-400 font-medium animate-pulse">Carregando seus dados...</p>
@@ -357,23 +368,35 @@ const App: React.FC = () => {
   const periodBalance = filteredTransactions.reduce((acc, t) => t.type === 'income' ? acc + t.amount : t.type === 'expense' ? acc - t.amount : acc, 0);
   const totalIncome = filteredTransactions.filter(t => t.type === 'income').reduce((acc, t) => acc + t.amount, 0);
   const totalExpense = filteredTransactions.filter(t => t.type === 'expense').reduce((acc, t) => acc + t.amount, 0);
+  
+  // Calculate Free Cash (Caixa Livre) Logic
   const totalCashBalance = transactions.filter(t => t.accountId === accountType).reduce((acc, t) => t.type === 'income' ? acc + t.amount : acc - t.amount, 0);
   
-  // --- FREE CASH CALCULATION ---
-  // Only applies to business effectively, but we calculate anyway
-  const totalFixedCosts = fixedCosts.reduce((acc, c) => acc + c.defaultAmount, 0);
-  const reserveRatio = appSettings.business.cashFlow.workingCapitalPercent || 50;
-  // If business, subtract reserve. If personal, Free Cash is essentially the balance (or we could apply similar logic, but adhering to request)
-  const requiredReserve = accountType === 'business' ? totalFixedCosts * (reserveRatio / 100) : 0;
-  const freeCash = totalCashBalance - requiredReserve;
-  const isFreeCashPositive = freeCash >= 0;
-
+  let freeCash = totalCashBalance;
+  let reserveLabel = "Caixa Livre";
+  let reserveIcon = <ShieldCheck size={20} />;
+  
+  if (accountType === 'business') {
+      const totalMonthlyFixedCosts = fixedCosts.reduce((acc, c) => acc + c.defaultAmount, 0);
+      const reservePercent = appSettings.business.cashFlow.workingCapitalPercent || 50;
+      const requiredReserve = totalMonthlyFixedCosts * (reservePercent / 100);
+      freeCash = totalCashBalance - requiredReserve;
+  } else {
+      reserveLabel = "Caixa Livre";
+      reserveIcon = <Wallet size={20} />;
+  }
+  
   const getFilteredProjects = () => {
       const now = new Date();
       return projects.filter(p => {
           const pDate = new Date(p.startDate);
-          if (timeFilter === 'year') return pDate.getFullYear() === now.getFullYear();
-          if (timeFilter === 'month') return pDate.getMonth() === now.getMonth() && pDate.getFullYear() === now.getFullYear();
+          
+          if (timeFilter === 'year') {
+              return pDate.getFullYear() === now.getFullYear();
+          }
+          if (timeFilter === 'month') {
+              return pDate.getMonth() === now.getMonth() && pDate.getFullYear() === now.getFullYear();
+          }
           const start = new Date(now); start.setDate(now.getDate() - now.getDay()); start.setHours(0,0,0,0);
           const end = new Date(start); end.setDate(start.getDate() + 6); end.setHours(23,59,59,999);
           return pDate >= start && pDate <= end;
@@ -383,13 +406,13 @@ const App: React.FC = () => {
   const projectLabel = timeFilter === 'month' ? 'Neste Mês' : timeFilter === 'year' ? 'Neste Ano' : 'Nesta Semana';
 
   return (
-    <div className={`min-h-screen font-sans text-slate-800 dark:text-slate-100 transition-colors duration-500 ${isDarkMode ? 'bg-black' : 'bg-[#F8FAFC]'}`}>
+    <div className={`min-h-screen font-sans text-slate-800 dark:text-slate-100 transition-colors duration-500 ${isDarkMode ? 'bg-black' : 'bg-[#F0F2F5]'}`}>
       
       {isDarkMode && (
           <div className="fixed inset-0 pointer-events-none overflow-hidden">
-              <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-br from-slate-950 via-black to-black opacity-90"></div>
-              <div className="absolute top-[-20%] left-[-10%] w-[60vw] h-[60vw] bg-blue-900/10 rounded-full blur-[150px] animate-pulse-slow"></div>
-              <div className="absolute bottom-[-10%] right-[-10%] w-[60vw] h-[60vw] bg-indigo-900/10 rounded-full blur-[150px] animate-pulse-slow"></div>
+              <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-br from-slate-900 via-black to-black opacity-90"></div>
+              <div className="absolute top-[-20%] left-[-10%] w-[60vw] h-[60vw] bg-blue-900/10 rounded-full blur-[150px]"></div>
+              <div className="absolute bottom-[-10%] right-[-10%] w-[60vw] h-[60vw] bg-indigo-900/10 rounded-full blur-[150px]"></div>
           </div>
       )}
 
@@ -402,81 +425,76 @@ const App: React.FC = () => {
             settings={appSettings}
           />
 
-          <main className="max-w-[1600px] mx-auto px-4 pt-8 pb-20 space-y-8 animate-fade-up">
+          <main className="max-w-[1600px] mx-auto px-4 pt-8 pb-20 space-y-8 animate-enter">
             {loadError && (
               <div className="bg-amber-100 border border-amber-200 text-amber-800 p-4 rounded-xl flex items-center gap-2">
                 <AlertTriangle size={20} /> {loadError}
               </div>
             )}
 
-            <div className="flex flex-wrap items-center justify-between gap-4 animate-fade-in stagger-1">
+            <div className="flex flex-wrap items-center justify-between gap-4">
               <div>
-                <h1 className="text-3xl font-black text-slate-900 dark:text-white tracking-tight">
-                  {currentView === 'dashboard' ? 'Visão Geral' : currentView === 'transactions' ? 'Transações' : currentView === 'projects' ? 'Projetos' : currentView === 'cashflow' ? 'Fluxo de Caixa' : currentView === 'business_settings' ? 'Custos Fixos' : currentView === 'reports' ? 'Relatórios' : currentView === 'settings' ? 'Configurações' : currentView}
+                <h1 className="text-3xl font-black text-slate-900 dark:text-white tracking-tight animate-in fade-in slide-in-from-bottom-2 duration-700">
+                  {currentView === 'dashboard' ? 'Visão Geral' : currentView === 'transactions' ? 'Transações' : currentView === 'projects' ? 'Projetos' : currentView}
                 </h1>
-                <p className="text-slate-500 dark:text-slate-400 text-sm mt-1 font-medium flex items-center gap-2">
-                    {accountType === 'business' ? <span className="bg-purple-100 text-purple-700 px-2 py-0.5 rounded text-xs font-bold">Corporativo</span> : <span className="bg-blue-100 text-blue-700 px-2 py-0.5 rounded text-xs font-bold">Pessoal</span>}
-                    {new Date().toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long' })}
-                </p>
+                <p className="text-slate-500 dark:text-slate-400 text-sm mt-1 font-medium animate-in fade-in slide-in-from-bottom-3 duration-700 delay-100">{accountType === 'business' ? 'Perfil Empresarial' : 'Perfil Pessoal'}</p>
               </div>
-              <div className="flex gap-3">
+              <div className="flex gap-3 animate-in fade-in slide-in-from-right-4 duration-700">
                 {(currentView === 'dashboard' || currentView === 'calendar') && (
-                  <div className="bg-white dark:bg-white/5 dark:backdrop-blur-md rounded-xl p-1 flex border border-slate-200 dark:border-white/10 shadow-sm">
+                  <div className="bg-white dark:bg-white/10 dark:backdrop-blur-md rounded-xl p-1 flex border border-slate-200 dark:border-white/10">
                     {['week', 'month', 'year'].map(t => (
-                      <button key={t} onClick={() => setTimeFilter(t as any)} className={`px-4 py-1.5 text-xs font-bold rounded-lg transition-all ${timeFilter === t ? 'bg-slate-900 dark:bg-white text-white dark:text-slate-900 shadow-md scale-105' : 'text-slate-500 dark:text-slate-300 hover:text-slate-800 dark:hover:text-white'}`}>
+                      <button key={t} onClick={() => setTimeFilter(t as any)} className={`px-4 py-1.5 text-xs font-bold rounded-lg transition-all ${timeFilter === t ? 'bg-slate-900 dark:bg-white text-white dark:text-slate-900 shadow-md' : 'text-slate-500 dark:text-slate-300 hover:text-slate-800 dark:hover:text-white'}`}>
                         {t === 'week' ? 'Semana' : t === 'month' ? 'Mês' : 'Ano'}
                       </button>
                     ))}
                   </div>
                 )}
-                <button onClick={() => setValuesVisible(!valuesVisible)} className="p-3 bg-white dark:bg-white/5 dark:backdrop-blur-md rounded-xl border border-slate-200 dark:border-white/10 text-slate-500 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-white/20 transition-all active:scale-95 shadow-sm">
+                <button onClick={() => setValuesVisible(!valuesVisible)} className="p-3 bg-white dark:bg-white/10 dark:backdrop-blur-md rounded-xl border border-slate-200 dark:border-white/10 text-slate-500 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-white/20 transition-colors">
                   {valuesVisible ? <EyeOff size={20} /> : <Eye size={20} />}
                 </button>
+                <button onClick={signOut} className="p-3 bg-red-50 dark:bg-red-500/10 text-red-500 dark:text-red-400 rounded-xl border border-red-100 dark:border-red-500/20 hover:bg-red-100 dark:hover:bg-red-500/20 transition-colors"><LogOut size={20} /></button>
               </div>
             </div>
 
             {currentView === 'dashboard' && (
               <>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 animate-fade-up stagger-2">
-                  <BalanceCard totalBalance={periodBalance} monthlyIncome={totalIncome} monthlyExpense={totalExpense} isVisible={valuesVisible} label="Saldo do Período" />
-                  
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                  <div className="animate-enter animate-delay-100 h-full">
+                     <BalanceCard totalBalance={periodBalance} monthlyIncome={totalIncome} monthlyExpense={totalExpense} isVisible={valuesVisible} label="Saldo do Período" />
+                  </div>
                   <div className="md:col-span-2 grid grid-cols-1 sm:grid-cols-3 gap-4">
-                      {/* FREE CASH CARD (REPLACES TOTAL CASH) */}
-                      <div className="glass-card p-6 rounded-3xl shadow-sm transition-all hover:scale-[1.02] hover:shadow-xl group relative overflow-hidden">
-                        <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500/10 rounded-full -mr-16 -mt-16 blur-xl group-hover:bg-blue-500/20 transition-all"></div>
-                        <div className="relative z-10">
-                            <div className="flex items-center gap-2 mb-3">
-                                {isFreeCashPositive ? <ShieldCheck size={20} className="text-emerald-500" /> : <AlertTriangle size={20} className="text-amber-500" />}
-                                <span className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Caixa Livre</span>
-                            </div>
-                            <div className={`text-3xl xl:text-4xl font-black tracking-tight ${isFreeCashPositive ? 'text-slate-800 dark:text-white' : 'text-amber-600 dark:text-amber-500'}`}>
-                                {valuesVisible ? `R$ ${freeCash.toLocaleString('pt-BR', {compactDisplay: 'short'})}` : '••••'}
-                            </div>
-                            <div className="text-[10px] text-slate-400 mt-2 font-medium">
-                                {accountType === 'business' ? 'Após reserva de emergência' : 'Disponível para uso'}
-                            </div>
+                      
+                      {/* Caixa Livre Card - Redesigned */}
+                      <div className="bg-white dark:bg-white/5 dark:backdrop-blur-xl p-6 rounded-3xl shadow-sm border border-slate-200 dark:border-white/10 tech-card animate-enter animate-delay-200">
+                        <div className={`flex items-center gap-2 mb-3 ${freeCash < 0 ? 'text-amber-500' : 'text-emerald-600 dark:text-emerald-400'}`}>
+                            {reserveIcon}
+                            <span className="text-xs font-bold uppercase tracking-wider">{reserveLabel}</span>
+                        </div>
+                        <div className={`text-3xl xl:text-4xl font-black tracking-tight ${freeCash < 0 ? 'text-amber-500' : 'text-slate-800 dark:text-white'}`}>
+                            {valuesVisible ? `R$ ${freeCash.toLocaleString()}` : '••••'}
+                        </div>
+                        <div className="text-[10px] text-slate-400 mt-2 font-medium">
+                            {accountType === 'business' ? 'Após reserva de emergência' : 'Disponível para uso'}
                         </div>
                       </div>
 
-                      <div className="glass-card p-6 rounded-3xl shadow-sm transition-all hover:scale-[1.02] hover:shadow-xl group">
-                        <div className="flex items-center gap-2 mb-3 text-blue-600 dark:text-blue-400"><CheckCircle size={20} /><span className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Movimentações</span></div>
+                      <div className="bg-white dark:bg-white/5 dark:backdrop-blur-xl p-6 rounded-3xl shadow-sm border border-slate-200 dark:border-white/10 tech-card animate-enter animate-delay-200">
+                        <div className="flex items-center gap-2 mb-3 text-blue-600 dark:text-blue-400"><CheckCircle size={20} /><span className="text-xs font-bold uppercase tracking-wider">Movimentações</span></div>
                         <div className="text-3xl xl:text-4xl font-black text-slate-800 dark:text-white tracking-tight">{filteredTransactions.length}</div>
-                        <div className="text-[10px] text-slate-400 mt-2 font-medium">Transações no período</div>
                       </div>
-
-                      <div className="glass-card p-6 rounded-3xl shadow-sm transition-all hover:scale-[1.02] hover:shadow-xl group">
-                        <div className="flex items-center gap-2 mb-3 text-purple-600 dark:text-purple-400"><FolderPlus size={20} /><span className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Novos Projetos</span></div>
+                      
+                      <div className="bg-white dark:bg-white/5 dark:backdrop-blur-xl p-6 rounded-3xl shadow-sm border border-slate-200 dark:border-white/10 tech-card animate-enter animate-delay-300">
+                        <div className="flex items-center gap-2 mb-3 text-purple-600 dark:text-purple-400"><FolderPlus size={20} /><span className="text-xs font-bold uppercase tracking-wider">Novos Projetos</span></div>
                         <div className="text-3xl xl:text-4xl font-black text-slate-800 dark:text-white tracking-tight">{newProjectsCount}</div>
-                        <div className="text-[10px] text-slate-400 mt-2 font-medium">{projectLabel}</div>
+                        <div className="text-[10px] text-slate-400 mt-1 uppercase font-bold">{projectLabel}</div>
                       </div>
                   </div>
                 </div>
-                
-                <div className="animate-fade-up stagger-3">
-                     <OverviewCharts transactions={filteredTransactions} isVisible={valuesVisible} />
+                <div className="animate-enter animate-delay-300">
+                    <OverviewCharts transactions={filteredTransactions} isVisible={valuesVisible} />
                 </div>
-                <div className="animate-fade-up stagger-4">
-                     <TransactionList transactions={filteredTransactions} isVisible={valuesVisible} />
+                <div className="animate-enter animate-delay-300">
+                    <TransactionList transactions={filteredTransactions} isVisible={valuesVisible} />
                 </div>
               </>
             )}
@@ -540,7 +558,7 @@ const App: React.FC = () => {
       />
 
       {backgroundSyncing && (
-        <div className="fixed bottom-6 right-6 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-xl rounded-full px-4 py-2 flex items-center gap-3 animate-slide-in-right z-50">
+        <div className="fixed bottom-6 right-6 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-xl rounded-full px-4 py-2 flex items-center gap-3 animate-in slide-in-from-bottom-2 fade-in z-50">
            <RefreshCw size={14} className="animate-spin text-blue-600 dark:text-blue-400" />
            <span className="text-xs font-bold text-slate-600 dark:text-slate-300">Sincronizando...</span>
         </div>
