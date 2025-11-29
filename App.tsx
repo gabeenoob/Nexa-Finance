@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useCallback } from 'react';
 import Header from './components/Header';
 import BalanceCard from './components/BalanceCard';
@@ -411,6 +412,8 @@ const App: React.FC = () => {
             accountType={accountType} setAccountType={setAccountType}
             onNewTransaction={() => { setModalMode('default'); setEditingTransaction(null); setIsTransactionModalOpen(true); }}
             settings={appSettings}
+            onLogout={signOut}
+            userEmail={user?.email || ''}
           />
 
           <main className="max-w-[1600px] mx-auto px-4 pt-8 pb-20 space-y-8 animate-slide-up">
@@ -440,7 +443,6 @@ const App: React.FC = () => {
                 <button onClick={() => setValuesVisible(!valuesVisible)} className="p-3 bg-white dark:bg-white/10 dark:backdrop-blur-md rounded-xl border border-slate-200 dark:border-white/10 text-slate-500 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-white/20 transition-colors">
                   {valuesVisible ? <EyeOff size={20} /> : <Eye size={20} />}
                 </button>
-                <button onClick={signOut} className="p-3 bg-red-50 dark:bg-red-500/10 text-red-500 dark:text-red-400 rounded-xl border border-red-100 dark:border-red-500/20 hover:bg-red-100 dark:hover:bg-red-500/20 transition-colors"><LogOut size={20} /></button>
               </div>
             </div>
 
@@ -452,7 +454,7 @@ const App: React.FC = () => {
                   </div>
                   
                   <div className="md:col-span-2 grid grid-cols-1 sm:grid-cols-3 gap-4">
-                      {/* CARD CAIXA LIVRE (MODIFICADO) */}
+                      {/* CARD CAIXA LIVRE */}
                       <div className="bg-white dark:bg-white/5 dark:backdrop-blur-xl p-6 rounded-3xl shadow-sm border border-slate-200 dark:border-white/10 transition-all hover:scale-[1.01] hover:shadow-md animate-in fade-in zoom-in duration-500 delay-200 group">
                         <div className="flex items-center gap-2 mb-3 text-emerald-600 dark:text-emerald-400">
                             <ShieldCheck size={20} />
@@ -473,11 +475,14 @@ const App: React.FC = () => {
                         <div className="text-3xl xl:text-4xl font-black text-slate-800 dark:text-white tracking-tight">{filteredTransactions.length}</div>
                       </div>
 
-                      <div className="bg-white dark:bg-white/5 dark:backdrop-blur-xl p-6 rounded-3xl shadow-sm border border-slate-200 dark:border-white/10 transition-all hover:scale-[1.01] hover:shadow-md animate-in fade-in zoom-in duration-500 delay-500">
-                        <div className="flex items-center gap-2 mb-3 text-purple-600 dark:text-purple-400"><FolderPlus size={20} /><span className="text-xs font-bold uppercase tracking-wider">Novos Projetos</span></div>
-                        <div className="text-3xl xl:text-4xl font-black text-slate-800 dark:text-white tracking-tight">{newProjectsCount}</div>
-                        <div className="text-[10px] text-slate-400 mt-1 uppercase font-bold">{projectLabel}</div>
-                      </div>
+                      {/* Novos Projetos - VISÍVEL APENAS PARA CONTA EMPRESARIAL */}
+                      {accountType === 'business' && (
+                          <div className="bg-white dark:bg-white/5 dark:backdrop-blur-xl p-6 rounded-3xl shadow-sm border border-slate-200 dark:border-white/10 transition-all hover:scale-[1.01] hover:shadow-md animate-in fade-in zoom-in duration-500 delay-500">
+                            <div className="flex items-center gap-2 mb-3 text-purple-600 dark:text-purple-400"><FolderPlus size={20} /><span className="text-xs font-bold uppercase tracking-wider">Novos Projetos</span></div>
+                            <div className="text-3xl xl:text-4xl font-black text-slate-800 dark:text-white tracking-tight">{newProjectsCount}</div>
+                            <div className="text-[10px] text-slate-400 mt-1 uppercase font-bold">{projectLabel}</div>
+                          </div>
+                      )}
                   </div>
                 </div>
                 <div className="animate-in slide-in-from-bottom-8 duration-700 delay-300">

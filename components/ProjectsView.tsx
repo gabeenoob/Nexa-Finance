@@ -2,7 +2,7 @@
 import React, { useState } from 'react';
 import { Project, Client, Transaction } from '../types';
 import { 
-  Users, FolderKanban, Plus, Trash2, Edit2, Phone, Mail, FileText, Calendar, Wallet, BarChart3
+  Users, FolderKanban, Plus, Trash2, Edit2, Phone, Mail, FileText, Calendar, Wallet, X, CheckCircle2
 } from 'lucide-react';
 
 interface ProjectsViewProps {
@@ -257,75 +257,151 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
 
       {/* Client Modal */}
       {isClientModalOpen && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-           <div className="bg-white dark:bg-slate-900 p-6 rounded-2xl w-full max-w-md shadow-2xl animate-in zoom-in-95">
-               <h3 className="text-lg font-bold mb-4 text-slate-800 dark:text-white">{editingClient ? 'Editar Cliente' : 'Novo Cliente'}</h3>
-               <div className="space-y-3">
-                   <input placeholder="Nome Completo / Razão Social" value={clientForm.name} onChange={e => setClientForm({...clientForm, name: e.target.value})} className="w-full p-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 outline-none focus:ring-2 focus:ring-blue-500" />
-                   <input placeholder="Telefone" value={clientForm.phone} onChange={e => setClientForm({...clientForm, phone: e.target.value})} className="w-full p-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 outline-none focus:ring-2 focus:ring-blue-500" />
-                   <input placeholder="CPF / CNPJ" value={clientForm.document} onChange={e => setClientForm({...clientForm, document: e.target.value})} className="w-full p-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 outline-none focus:ring-2 focus:ring-blue-500" />
-                   <input placeholder="Email (opcional)" value={clientForm.email} onChange={e => setClientForm({...clientForm, email: e.target.value})} className="w-full p-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 outline-none focus:ring-2 focus:ring-blue-500" />
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
+           <div className="bg-white dark:bg-slate-900 w-full max-w-md rounded-2xl shadow-2xl overflow-hidden flex flex-col">
+               <div className="flex items-center justify-between p-4 border-b border-slate-100 dark:border-slate-800">
+                    <h2 className="text-lg font-bold text-slate-800 dark:text-white">{editingClient ? 'Editar Cliente' : 'Novo Cliente'}</h2>
+                    <button onClick={() => setIsClientModalOpen(false)} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full transition-colors text-slate-500">
+                        <X size={20} />
+                    </button>
                </div>
-               <div className="flex gap-3 mt-6">
-                   <button onClick={() => setIsClientModalOpen(false)} className="flex-1 py-3 bg-slate-100 dark:bg-slate-800 rounded-xl font-bold text-slate-600 hover:bg-slate-200">Cancelar</button>
-                   <button onClick={handleSaveClient} className="flex-1 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold">Salvar</button>
+               
+               <div className="p-6 space-y-4">
+                   <div className="group relative">
+                       <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Nome Completo</label>
+                       <input value={clientForm.name} onChange={e => setClientForm({...clientForm, name: e.target.value})} className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 text-slate-800 dark:text-white outline-none focus:ring-2 focus:ring-blue-500 transition-all" placeholder="Ex: Empresa Ltda" />
+                   </div>
+                   <div className="group relative">
+                       <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Telefone</label>
+                       <input value={clientForm.phone} onChange={e => setClientForm({...clientForm, phone: e.target.value})} className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 text-slate-800 dark:text-white outline-none focus:ring-2 focus:ring-blue-500 transition-all" placeholder="(00) 00000-0000" />
+                   </div>
+                   <div className="group relative">
+                        <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Documento (CPF/CNPJ)</label>
+                       <input value={clientForm.document} onChange={e => setClientForm({...clientForm, document: e.target.value})} className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 text-slate-800 dark:text-white outline-none focus:ring-2 focus:ring-blue-500 transition-all" placeholder="000.000.000-00" />
+                   </div>
+                   <div className="group relative">
+                       <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Email</label>
+                       <input value={clientForm.email} onChange={e => setClientForm({...clientForm, email: e.target.value})} className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 text-slate-800 dark:text-white outline-none focus:ring-2 focus:ring-blue-500 transition-all" placeholder="contato@empresa.com" />
+                   </div>
+               </div>
+
+               <div className="p-4 border-t border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 flex gap-3">
+                   <button onClick={() => setIsClientModalOpen(false)} className="flex-1 py-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl font-bold text-slate-600 dark:text-white hover:bg-slate-50 dark:hover:bg-slate-700 transition-all">Cancelar</button>
+                   <button onClick={handleSaveClient} className="flex-1 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold shadow-lg shadow-blue-500/20 transition-all">Salvar Cliente</button>
                </div>
            </div>
         </div>
       )}
 
-      {/* Project Modal */}
+      {/* Project Modal (REDESIGNED) */}
       {isProjectModalOpen && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-           <div className="bg-white dark:bg-slate-900 p-8 rounded-2xl w-full max-w-lg shadow-2xl max-h-[90vh] overflow-y-auto custom-scrollbar animate-in zoom-in-95">
-               <h3 className="text-xl font-bold mb-6 text-slate-800 dark:text-white flex items-center gap-2">
-                   <FolderKanban className="text-blue-500" />
-                   {editingProject ? 'Editar Projeto' : 'Novo Projeto'}
-               </h3>
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
+           <div className="bg-white dark:bg-slate-900 w-full max-w-lg rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+               {/* Header */}
+               <div className="flex items-center justify-between p-4 border-b border-slate-100 dark:border-slate-800">
+                   <h2 className="text-lg font-bold text-slate-800 dark:text-white flex items-center gap-2">
+                       {editingProject ? 'Editar Projeto' : 'Novo Projeto'}
+                   </h2>
+                   <button onClick={() => setIsProjectModalOpen(false)} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full transition-colors text-slate-500">
+                        <X size={20} />
+                   </button>
+               </div>
                
-               <div className="space-y-5">
+               {/* Content - Scrollable */}
+               <div className="p-6 overflow-y-auto space-y-5 custom-scrollbar">
+                   {/* Name */}
                    <div>
-                       <label className="text-xs font-bold text-slate-500 uppercase mb-1 block">Nome do Projeto</label>
-                       <input value={projectForm.name} onChange={e => setProjectForm({...projectForm, name: e.target.value})} className="w-full p-3.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 outline-none focus:ring-2 focus:ring-blue-500 text-slate-800 dark:text-white font-medium" placeholder="Ex: E-commerce Loja X" />
+                       <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Nome do Projeto</label>
+                       <input 
+                           value={projectForm.name} 
+                           onChange={e => setProjectForm({...projectForm, name: e.target.value})} 
+                           className="w-full bg-slate-50 dark:bg-slate-800 border-2 border-transparent focus:border-blue-500 rounded-xl px-4 py-3 text-lg font-bold text-slate-800 dark:text-white outline-none transition-all placeholder:text-slate-400"
+                           placeholder="Ex: E-commerce Loja X" 
+                           autoFocus={!editingProject}
+                       />
                    </div>
                    
+                   {/* Value */}
                    <div>
-                       <label className="text-xs font-bold text-slate-500 uppercase mb-1 block">Cliente</label>
-                       <select value={projectForm.clientId} onChange={e => setProjectForm({...projectForm, clientId: e.target.value})} className="w-full p-3.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 outline-none focus:ring-2 focus:ring-blue-500 text-slate-800 dark:text-white font-medium">
-                           <option value="">Selecione um cliente...</option>
-                           {clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                       </select>
-                   </div>
-                   
-                   <div>
-                        <label className="text-xs font-bold text-slate-500 uppercase mb-1 block">Valor Total (Receita)</label>
+                        <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Valor do Contrato</label>
                         <div className="relative">
                             <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 font-bold">R$</span>
-                            <input type="number" value={projectForm.value} onChange={e => setProjectForm({...projectForm, value: e.target.value})} className="w-full p-3.5 pl-10 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 outline-none focus:ring-2 focus:ring-emerald-500 text-slate-800 dark:text-white font-bold" placeholder="0.00" />
+                            <input 
+                                type="number" 
+                                value={projectForm.value} 
+                                onChange={e => setProjectForm({...projectForm, value: e.target.value})} 
+                                className="w-full bg-slate-50 dark:bg-slate-800 border-2 border-transparent focus:border-emerald-500 rounded-xl pl-12 pr-4 py-4 text-2xl font-bold text-slate-800 dark:text-white outline-none transition-all placeholder:text-slate-300"
+                                placeholder="0.00" 
+                            />
                         </div>
                    </div>
 
+                   {/* Client Select */}
+                   <div>
+                       <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Cliente Vinculado</label>
+                       <div className="relative">
+                           <Users className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4" />
+                           <select 
+                               value={projectForm.clientId} 
+                               onChange={e => setProjectForm({...projectForm, clientId: e.target.value})} 
+                               className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl pl-11 pr-4 py-3 text-slate-800 dark:text-white outline-none focus:ring-2 focus:ring-blue-500 appearance-none font-medium cursor-pointer"
+                           >
+                               <option value="" disabled>Selecione um cliente...</option>
+                               {clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                           </select>
+                       </div>
+                       <p className="text-[10px] text-slate-400 mt-1 pl-1">*O valor será lançado automaticamente como receita para este cliente.</p>
+                   </div>
+                   
+                   {/* Dates */}
                    <div className="grid grid-cols-2 gap-4">
                        <div>
-                            <label className="text-xs font-bold text-slate-500 uppercase mb-1 block">Data de Início</label>
-                            <input type="date" value={projectForm.startDate} onChange={e => setProjectForm({...projectForm, startDate: e.target.value})} className="w-full p-3.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 outline-none focus:ring-2 focus:ring-blue-500 text-slate-800 dark:text-white font-medium" />
+                            <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Data Início</label>
+                            <input 
+                                type="date" 
+                                value={projectForm.startDate} 
+                                onChange={e => setProjectForm({...projectForm, startDate: e.target.value})} 
+                                className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 text-sm text-slate-800 dark:text-white outline-none focus:ring-2 focus:ring-blue-500" 
+                            />
                        </div>
                        <div>
-                            <label className="text-xs font-bold text-slate-500 uppercase mb-1 block">Prazo de Entrega</label>
-                            <input type="date" value={projectForm.deadline} onChange={e => setProjectForm({...projectForm, deadline: e.target.value})} className="w-full p-3.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 outline-none focus:ring-2 focus:ring-blue-500 text-slate-800 dark:text-white font-medium" />
+                            <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Prazo (Opcional)</label>
+                            <input 
+                                type="date" 
+                                value={projectForm.deadline} 
+                                onChange={e => setProjectForm({...projectForm, deadline: e.target.value})} 
+                                className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 text-sm text-slate-800 dark:text-white outline-none focus:ring-2 focus:ring-blue-500" 
+                            />
                        </div>
                    </div>
                    
+                   {/* Description */}
                    <div>
-                       <label className="text-xs font-bold text-slate-500 uppercase mb-1 block">Descrição Adicional</label>
-                       <textarea value={projectForm.description} onChange={e => setProjectForm({...projectForm, description: e.target.value})} className="w-full p-3.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 outline-none focus:ring-2 focus:ring-blue-500 text-slate-800 dark:text-white font-medium" rows={3} placeholder="Detalhes do projeto..." />
+                       <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Descrição</label>
+                       <textarea 
+                            value={projectForm.description} 
+                            onChange={e => setProjectForm({...projectForm, description: e.target.value})} 
+                            className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 text-sm text-slate-800 dark:text-white outline-none focus:ring-2 focus:ring-blue-500 resize-none" 
+                            rows={3} 
+                            placeholder="Detalhes adicionais do escopo..." 
+                        />
                    </div>
                </div>
                
-               <div className="flex gap-3 mt-8">
-                   <button onClick={() => setIsProjectModalOpen(false)} className="flex-1 py-3.5 bg-slate-100 dark:bg-slate-800 rounded-xl font-bold text-slate-600 hover:bg-slate-200 transition-colors">Cancelar</button>
-                   <button onClick={handleSaveProject} className="flex-[2] py-3.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold shadow-lg shadow-blue-500/30 transition-all">
-                       {editingProject ? 'Salvar Alterações' : 'Criar e Registrar'}
+               {/* Footer Actions */}
+               <div className="p-4 border-t border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-900 flex gap-3">
+                   <button 
+                        onClick={() => setIsProjectModalOpen(false)} 
+                        className="flex-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-700 dark:text-white font-bold py-3.5 rounded-xl transition-all"
+                   >
+                        Cancelar
+                   </button>
+                   <button 
+                        onClick={handleSaveProject} 
+                        className="flex-[2] bg-slate-900 dark:bg-blue-600 hover:bg-slate-800 dark:hover:bg-blue-700 text-white font-bold py-3.5 rounded-xl shadow-lg shadow-slate-900/10 transition-all active:scale-[0.98] flex items-center justify-center gap-2"
+                   >
+                       <CheckCircle2 size={18} />
+                       {editingProject ? 'Salvar Alterações' : 'Confirmar Projeto'}
                    </button>
                </div>
            </div>

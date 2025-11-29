@@ -15,7 +15,8 @@ import {
   TrendingUp, 
   BarChart3, 
   FolderKanban,
-  LogOut
+  LogOut,
+  UserCircle2
 } from 'lucide-react';
 import { AccountType, AppSettings } from '../types';
 
@@ -28,6 +29,8 @@ interface HeaderProps {
   setAccountType: (type: AccountType) => void;
   onNewTransaction: () => void;
   settings: AppSettings;
+  onLogout?: () => void;
+  userEmail?: string;
 }
 
 const Header: React.FC<HeaderProps> = ({ 
@@ -38,16 +41,24 @@ const Header: React.FC<HeaderProps> = ({
   accountType, 
   setAccountType, 
   onNewTransaction, 
-  settings 
+  settings,
+  onLogout,
+  userEmail
 }) => {
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  
+  const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
+  const userMenuRef = useRef<HTMLDivElement>(null);
 
-  // Close dropdown when clicking outside
+  // Close dropdowns when clicking outside
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
         setIsProfileOpen(false);
+      }
+      if (userMenuRef.current && !userMenuRef.current.contains(event.target as Node)) {
+        setIsUserMenuOpen(false);
       }
     };
     document.addEventListener('mousedown', handleClickOutside);
@@ -59,7 +70,8 @@ const Header: React.FC<HeaderProps> = ({
   const handleSwitchAccount = (type: AccountType) => {
     setAccountType(type);
     setIsProfileOpen(false);
-    onNavigate('dashboard'); // Redirect to dashboard on switch to avoid view conflicts
+    setIsUserMenuOpen(false);
+    onNavigate('dashboard'); // Redirect to dashboard on switch
   };
   
   // Specific Order: Visão Geral, Fluxo de Caixa, Projetos, Transações, Custos, Calendário, Relatórios
@@ -103,7 +115,7 @@ const Header: React.FC<HeaderProps> = ({
               </div>
             </button>
             
-            {/* Improved Dropdown */}
+            {/* Account Switch Dropdown */}
             {isProfileOpen && (
               <div className="absolute top-full left-0 mt-2 w-80 bg-white/95 dark:bg-slate-900/95 backdrop-blur-xl rounded-2xl shadow-2xl border border-slate-100 dark:border-slate-700 overflow-hidden animate-in fade-in slide-in-from-top-2 p-2">
                 <div className="px-4 py-3 border-b border-slate-100 dark:border-slate-800">
@@ -169,7 +181,7 @@ const Header: React.FC<HeaderProps> = ({
           })}
         </nav>
 
-        {/* Right: Actions */}
+        {/* Right: Actions & User Profile */}
         <div className="flex items-center gap-2 pr-2 ml-auto xl:ml-0">
           <button 
             onClick={onNewTransaction}
@@ -192,6 +204,47 @@ const Header: React.FC<HeaderProps> = ({
           >
             <Settings className="w-5 h-5" />
           </button>
+
+          {/* User Menu */}
+          <div className="relative" ref={userMenuRef}>
+            <button
+               onClick={() => setIsUserMenuOpen(!isUserMenuOpen)}
+               className={`p-1.5 rounded-xl border transition-all ${isUserMenuOpen ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20' : 'border-transparent hover:bg-slate-100 dark:hover:bg-slate-800'}`}
+            >
+                <div className="w-8 h-8 rounded-lg bg-slate-200 dark:bg-slate-700 flex items-center justify-center text-slate-500 dark:text-slate-300">
+                    <UserCircle2 size={20} />
+                </div>
+            </button>
+
+            {isUserMenuOpen && (
+                <div className="absolute top-full right-0 mt-3 w-64 bg-white/95 dark:bg-slate-900/95 backdrop-blur-xl rounded-2xl shadow-2xl border border-slate-100 dark:border-slate-700 overflow-hidden animate-in fade-in slide-in-from-top-2 p-2">
+                    <div className="px-4 py-3 border-b border-slate-100 dark:border-slate-800 mb-2">
+                        <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-1">Conta Atual</p>
+                        <p className="text-sm font-bold text-slate-800 dark:text-white truncate">{userEmail}</p>
+                    </div>
+
+                    <button 
+                        onClick={() => handleSwitchAccount(accountType === 'business' ? 'personal' : 'business')}
+                        className="w-full text-left px-4 py-2.5 text-sm font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-xl transition-colors flex items-center gap-2"
+                    >
+                        {accountType === 'business' ? <User size={16} /> : <Briefcase size={16} />}
+                        Ir para {accountType === 'business' ? 'Perfil Pessoal' : 'Perfil Empresarial'}
+                    </button>
+
+                    <button 
+                        onClick={() => {
+                            if(onLogout) onLogout();
+                            setIsUserMenuOpen(false);
+                        }}
+                        className="w-full text-left px-4 py-2.5 text-sm font-bold text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-xl transition-colors flex items-center gap-2 mt-1"
+                    >
+                        <LogOut size={16} />
+                        Sair da Conta
+                    </button>
+                </div>
+            )}
+          </div>
+
         </div>
       </div>
     </header>
