@@ -1,6 +1,6 @@
 
 
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   Settings, 
   Plus, 
@@ -64,11 +64,6 @@ const Header: React.FC<HeaderProps> = ({
   const [newWsName, setNewWsName] = useState('');
   const [newWsType, setNewWsType] = useState<AccountType>('business');
 
-  // Animation State for Sliding Indicator
-  const [indicatorStyle, setIndicatorStyle] = useState({ left: 0, width: 0, opacity: 0 });
-  const navItemsRef = useRef<Map<string, HTMLButtonElement>>(new Map());
-  const navContainerRef = useRef<HTMLDivElement>(null);
-
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
@@ -85,37 +80,6 @@ const Header: React.FC<HeaderProps> = ({
     };
   }, []);
 
-  // Update indicator position when activeView changes
-  useEffect(() => {
-    const updateIndicator = () => {
-        const activeElement = navItemsRef.current.get(activeView);
-        if (activeElement && navContainerRef.current) {
-            // Calculate position relative to the container
-            const containerLeft = navContainerRef.current.getBoundingClientRect().left;
-            const itemLeft = activeElement.getBoundingClientRect().left;
-            const scrollLeft = navContainerRef.current.scrollLeft;
-            
-            // Adjust calculation based on whether the container is scrolled or positioned
-            const relativeLeft = activeElement.offsetLeft; 
-
-            setIndicatorStyle({
-                left: relativeLeft,
-                width: activeElement.offsetWidth,
-                opacity: 1
-            });
-        }
-    };
-
-    // Small delay to ensure DOM is ready and layout is stable
-    const timer = setTimeout(updateIndicator, 50);
-    window.addEventListener('resize', updateIndicator);
-    
-    return () => {
-        clearTimeout(timer);
-        window.removeEventListener('resize', updateIndicator);
-    };
-  }, [activeView, currentWorkspace.type]);
-
   const handleCreateSubmit = (e: React.FormEvent) => {
       e.preventDefault();
       if(newWsName) {
@@ -127,7 +91,7 @@ const Header: React.FC<HeaderProps> = ({
   }
 
   // Navigation Items
-  const navItems = useMemo(() => [
+  const navItems = [
     { id: 'dashboard', label: 'Visão Geral', icon: LayoutDashboard },
     ...(currentWorkspace.type === 'business' ? [
       { id: 'cashflow', label: 'Fluxo de Caixa', icon: TrendingUp },
@@ -139,7 +103,7 @@ const Header: React.FC<HeaderProps> = ({
     ] : []),
     { id: 'calendar', label: 'Calendário', icon: CalendarDays },
     { id: 'reports', label: 'Relatórios', icon: BarChart3 },
-  ], [currentWorkspace.type]);
+  ];
 
   return (
     <header className="sticky top-0 z-50 px-2 md:px-4 py-3 transition-colors duration-200">
@@ -237,35 +201,24 @@ const Header: React.FC<HeaderProps> = ({
           <div className="h-8 w-px bg-slate-200 dark:bg-slate-700 hidden xl:block"></div>
         </div>
 
-        {/* Navigation with Animated Sliding Indicator */}
-        <nav className="relative flex items-center gap-1 overflow-x-auto no-scrollbar w-full xl:w-auto order-3 xl:order-none mt-2 xl:mt-0 pb-1 xl:pb-0" ref={navContainerRef}>
-          
-          {/* Animated Background Pill */}
-          <div 
-             className="absolute top-1/2 -translate-y-1/2 h-[80%] bg-slate-100 dark:bg-slate-800 rounded-xl transition-all duration-300 ease-[cubic-bezier(0.2,0,0,1)] pointer-events-none"
-             style={{ 
-                 left: `${indicatorStyle.left}px`, 
-                 width: `${indicatorStyle.width}px`,
-                 opacity: indicatorStyle.opacity 
-             }}
-          />
-
+        {/* Navigation */}
+        <nav className="flex items-center gap-1 overflow-x-auto no-scrollbar w-full xl:w-auto order-3 xl:order-none mt-2 xl:mt-0 pb-1 xl:pb-0">
           {navItems.map((item) => {
             const Icon = item.icon;
             const isActive = activeView === item.id;
             return (
               <button
                 key={item.id}
-                ref={(el) => { if(el) navItemsRef.current.set(item.id, el); }}
                 onClick={() => onNavigate(item.id)}
-                className={`relative z-10 flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold transition-colors duration-300 whitespace-nowrap ${
+                className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold transition-all duration-300 relative group whitespace-nowrap ${
                   isActive 
-                    ? 'text-slate-900 dark:text-white' 
-                    : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300'
+                    ? 'text-slate-900 dark:text-white bg-slate-100 dark:bg-slate-800' 
+                    : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800/50'
                 }`}
               >
-                <Icon size={16} className={`transition-transform duration-300 ${isActive ? 'text-blue-600 dark:text-blue-400 scale-110' : ''}`} />
+                <Icon size={16} className={isActive ? 'text-blue-600 dark:text-blue-400' : ''} />
                 {item.label}
+                {isActive && <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-6 h-0.5 bg-blue-600 dark:bg-blue-400 rounded-full"></div>}
               </button>
             )
           })}
