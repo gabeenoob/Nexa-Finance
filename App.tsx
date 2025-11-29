@@ -137,6 +137,8 @@ const App: React.FC = () => {
     }
   };
 
+  // --- SYNC LOGIC: Transaction <-> Project ---
+
   const handleSaveTransaction = (txData: any, id?: string) => safeExecute(async () => {
     if (!user) return;
     const payload = { ...txData, date: new Date(txData.date), accountId: accountType };
@@ -144,69 +146,86 @@ const App: React.FC = () => {
     let savedTx: Transaction;
 
     if (id) {
+      // --- UPDATE TRANSACTION ---
       savedTx = await transactionService.update(id, payload);
       setTransactions(prev => prev.map(t => t.id === id ? savedTx : t));
+
+      // SYNC REVERSE: If Transaction is linked to a Project, update Project
+      if (savedTx.projectId) {
+          const linkedProject = projects.find(p => p.id === savedTx.projectId);
+          if (linkedProject) {
+              // Extract pure name if formatted
+              let newName = savedTx.description;
+              if (newName.startsWith('Projeto: ')) newName = newName.replace('Projeto: ', '');
+
+              // Update project if data diverged
+              const shouldUpdate = 
+                  linkedProject.value !== savedTx.amount || 
+                  linkedProject.startDate.getTime() !== savedTx.date.getTime() ||
+                  linkedProject.name !== newName;
+
+              if (shouldUpdate) {
+                  const updatedProj = await projectService.update(linkedProject.id, {
+                      value: savedTx.amount,
+                      startDate: savedTx.date,
+                      name: newName
+                  });
+                  setProjects(prev => prev.map(p => p.id === linkedProject.id ? updatedProj : p));
+              }
+          }
+      }
     } else {
+      // --- CREATE TRANSACTION ---
       savedTx = await transactionService.create(user.id, payload);
       setTransactions(prev => [...prev, savedTx]);
     }
     
     setIsTransactionModalOpen(false);
-
-    // SYNC REVERSE: Transaction -> Project
-    // If this transaction is linked to a project, verify if we need to update the project stats
-    if (savedTx.projectId) {
-        const linkedProject = projects.find(p => p.id === savedTx.projectId);
-        
-        if (linkedProject) {
-            // Determine potentially new project name from description
-            // If description starts with "Projeto: ", strip it for the name sync
-            let newProjectName = savedTx.description;
-            if (newProjectName.startsWith('Projeto: ')) {
-                newProjectName = newProjectName.replace('Projeto: ', '');
-            }
-
-            // Check for discrepancies in Name, Value or Date
-            const shouldUpdate = 
-                linkedProject.value !== savedTx.amount || 
-                linkedProject.startDate.getTime() !== savedTx.date.getTime() ||
-                linkedProject.name !== newProjectName;
-
-            if (shouldUpdate) {
-                const updatedProj = await projectService.update(linkedProject.id, {
-                    value: savedTx.amount,
-                    startDate: savedTx.date,
-                    name: newProjectName
-                });
-                setProjects(prev => prev.map(p => p.id === linkedProject.id ? updatedProj : p));
-            }
-        }
-    }
   });
 
-  const handleCreateProject = (p: any) => safeExecute(async () => {
+  const handleCreateProject = (projectData: any) => safeExecute(async () => {
     if(!user) return undefined;
-    const created = await projectService.create(user.id, p);
-    setProjects(prev => [...prev, created]);
-    return created;
+    
+    // 1. Create Project
+    const createdProject = await projectService.create(user.id, projectData);
+    setProjects(prev => [...prev, createdProject]);
+
+    // 2. Automatically Create Linked Transaction
+    const clientName = clients.find(c => c.id === projectData.clientId)?.name || 'Cliente';
+    const txPayload = {
+        description: `Projeto: ${createdProject.name}`,
+        amount: Number(createdProject.value),
+        date: new Date(createdProject.startDate),
+        type: 'income' as const,
+        category: 'Projetos',
+        accountId: 'business' as AccountType,
+        tags: ['projeto'],
+        projectId: createdProject.id, // IMPORTANT: Link IDs
+        source: clientName
+    };
+
+    const createdTx = await transactionService.create(user.id, txPayload);
+    setTransactions(prev => [...prev, createdTx]);
+
+    return createdProject;
   });
 
-  const handleUpdateProject = (id: string, p: any) => safeExecute(async () => {
+  const handleUpdateProject = (id: string, projectData: any) => safeExecute(async () => {
     if(!user) return;
     
     // 1. Update the Project
-    const updatedProject = await projectService.update(id, p);
+    const updatedProject = await projectService.update(id, projectData);
     setProjects(prev => prev.map(proj => proj.id === id ? updatedProject : proj));
 
-    // 2. Automatically Update Linked Transaction if exists (SYNC FORWARD: Project -> Transaction)
+    // 2. Find Linked Transaction and Update it (Do not create new)
     const linkedTx = transactions.find(t => t.projectId === id);
+    
     if (linkedTx) {
-      // Force "Projeto: Name" format for consistency
-      const newDescription = p.name ? `Projeto: ${p.name}` : linkedTx.description;
-      const newAmount = p.value !== undefined ? Number(p.value) : linkedTx.amount;
-      const newDate = p.startDate ? new Date(p.startDate) : linkedTx.date;
+      const newDescription = `Projeto: ${updatedProject.name}`;
+      const newAmount = Number(updatedProject.value);
+      const newDate = new Date(updatedProject.startDate);
 
-      // Only call API if something changed
+      // Only API call if changed
       if (
           linkedTx.description !== newDescription || 
           linkedTx.amount !== newAmount || 
@@ -219,6 +238,23 @@ const App: React.FC = () => {
           });
           setTransactions(prev => prev.map(t => t.id === linkedTx.id ? updatedTx : t));
       }
+    } else {
+        // Fallback: If for some reason transaction was deleted but project exists, recreate it?
+        // User requested strict syncing. Let's recreate it to ensure consistency.
+        const clientName = clients.find(c => c.id === updatedProject.clientId)?.name || 'Cliente';
+        const txPayload = {
+            description: `Projeto: ${updatedProject.name}`,
+            amount: Number(updatedProject.value),
+            date: new Date(updatedProject.startDate),
+            type: 'income' as const,
+            category: 'Projetos',
+            accountId: 'business' as AccountType,
+            tags: ['projeto', 'restaurado'],
+            projectId: updatedProject.id,
+            source: clientName
+        };
+        const restoredTx = await transactionService.create(user.id, txPayload);
+        setTransactions(prev => [...prev, restoredTx]);
     }
   });
 
@@ -263,6 +299,7 @@ const App: React.FC = () => {
   });
 
   const requestDelete = (id: string, type: 'transaction' | 'project' | 'client' | 'cost') => {
+      // If deleting a transaction that is a project, confirm project deletion instead
       if (type === 'transaction') {
           const tx = transactions.find(t => t.id === id);
           if (tx && tx.projectId) {
@@ -284,9 +321,18 @@ const App: React.FC = () => {
             setTransactions(prev => prev.filter(t => t.id !== id));
         } 
         else if (type === 'project') {
+            // Delete Project
             await projectService.delete(id);
             setProjects(prev => prev.filter(p => p.id !== id));
-            setTransactions(prev => prev.filter(t => t.projectId !== id));
+            
+            // Delete Linked Transaction from state (API handles strict delete if implemented, but we filter state)
+            // Ideally, we should also call API to delete transaction if cascading isn't set up in DB.
+            // For safety, let's find and delete the transaction via API too.
+            const linkedTx = transactions.find(t => t.projectId === id);
+            if (linkedTx) {
+                try { await transactionService.delete(linkedTx.id); } catch(e) { console.log('Tx already deleted or cascade worked'); }
+                setTransactions(prev => prev.filter(t => t.projectId !== id));
+            }
         } 
         else if (type === 'client') {
             await clientService.delete(id);
@@ -311,7 +357,6 @@ const App: React.FC = () => {
   if (loading || (initialLoad && user)) {
     return (
       <div className="min-h-screen bg-black flex flex-col items-center justify-center gap-4 relative overflow-hidden">
-        {/* Background Ambience similar to Login */}
         <div className="absolute top-[-10%] left-[-10%] w-[50vw] h-[50vw] bg-blue-600/20 rounded-full blur-[120px] animate-pulse"></div>
         <div className="absolute bottom-[-10%] right-[-10%] w-[50vw] h-[50vw] bg-indigo-600/20 rounded-full blur-[120px] animate-pulse delay-1000"></div>
         
@@ -348,7 +393,6 @@ const App: React.FC = () => {
   const totalExpense = filteredTransactions.filter(t => t.type === 'expense').reduce((acc, t) => acc + t.amount, 0);
   const totalCashBalance = transactions.filter(t => t.accountId === accountType).reduce((acc, t) => t.type === 'income' ? acc + t.amount : acc - t.amount, 0);
   
-  // Calculate new projects based on selected time filter
   const getFilteredProjects = () => {
       const now = new Date();
       return projects.filter(p => {
@@ -360,7 +404,6 @@ const App: React.FC = () => {
           if (timeFilter === 'month') {
               return pDate.getMonth() === now.getMonth() && pDate.getFullYear() === now.getFullYear();
           }
-          // Week
           const start = new Date(now); start.setDate(now.getDate() - now.getDay()); start.setHours(0,0,0,0);
           const end = new Date(start); end.setDate(start.getDate() + 6); end.setHours(23,59,59,999);
           return pDate >= start && pDate <= end;
@@ -372,7 +415,6 @@ const App: React.FC = () => {
   return (
     <div className={`min-h-screen font-sans text-slate-800 dark:text-slate-100 transition-colors duration-500 ${isDarkMode ? 'bg-black' : 'bg-[#F0F2F5]'}`}>
       
-      {/* Dark Mode Background Ambience */}
       {isDarkMode && (
           <div className="fixed inset-0 pointer-events-none overflow-hidden">
               <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-br from-slate-900 via-black to-black opacity-90"></div>
@@ -451,7 +493,6 @@ const App: React.FC = () => {
                 projects={projects} clients={clients} transactions={transactions}
                 onCreateProject={handleCreateProject} onUpdateProject={handleUpdateProject}
                 onCreateClient={handleCreateClient} onUpdateClient={handleUpdateClient}
-                onRegisterTransaction={(tx) => handleSaveTransaction(tx)}
                 onDeleteProject={(id) => requestDelete(id, 'project')} onDeleteClient={(id) => requestDelete(id, 'client')}
                 isVisible={valuesVisible}
               />
@@ -476,7 +517,7 @@ const App: React.FC = () => {
                     settings={appSettings} 
                     onUpdateSettings={setAppSettings} 
                     transactions={transactions} 
-                    fixedCosts={fixedCosts} // Pass fixedCosts directly for instant updates
+                    fixedCosts={fixedCosts}
                     businessConfig={businessConfig} 
                     accountType={accountType} 
                     isVisible={valuesVisible} 
@@ -505,7 +546,6 @@ const App: React.FC = () => {
         }
       />
 
-      {/* Discrete Background Sync Indicator */}
       {backgroundSyncing && (
         <div className="fixed bottom-6 right-6 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-xl rounded-full px-4 py-2 flex items-center gap-3 animate-in slide-in-from-bottom-2 fade-in z-50">
            <RefreshCw size={14} className="animate-spin text-blue-600 dark:text-blue-400" />

@@ -16,7 +16,7 @@ interface ProjectsViewProps {
   onCreateClient: (c: Omit<Client, 'id'>) => Promise<void>;
   onUpdateClient: (id: string, c: Partial<Client>) => Promise<void>;
 
-  onRegisterTransaction: (tx: Omit<Transaction, 'id' | 'accountId'>) => void;
+  // Removed direct tx registration to avoid duplication
   onDeleteProject: (id: string) => void;
   onDeleteClient: (id: string) => void;
   isVisible: boolean;
@@ -30,7 +30,6 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
   onUpdateProject,
   onCreateClient,
   onUpdateClient,
-  onRegisterTransaction,
   onDeleteProject,
   onDeleteClient,
   isVisible 
@@ -122,22 +121,8 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
     if (editingProject) {
         await onUpdateProject(editingProject.id, projectData);
     } else {
-        const newProject = await onCreateProject(projectData);
-        
-        // Register Income Transaction linked via TAG if project created successfully
-        if (newProject) {
-            const clientName = getClientName(projectForm.clientId);
-            onRegisterTransaction({
-                type: 'income',
-                amount: projectVal,
-                description: `Projeto: ${projectForm.name}`,
-                category: 'Projetos',
-                date: paymentDate,
-                tags: ['projeto', 'automático'],
-                source: clientName,
-                projectId: newProject.id // LINK TRANSACTION TO PROJECT
-            });
-        }
+        await onCreateProject(projectData);
+        // Note: Transaction creation is now handled automatically in App.tsx
     }
     setIsProjectModalOpen(false);
   };
