@@ -89,22 +89,39 @@ const App: React.FC = () => {
   const loadWorkspaces = async () => {
       if (!user) return;
       try {
+          // Attempt to load workspaces from the database
           const list = await workspaceService.listByUser(user.id, user.email || '');
           
           if (list.length === 0) {
-              // Create default Personal Workspace
-              const def = await workspaceService.create(user.id, 'Meu Espaço Pessoal', 'personal');
-              setWorkspaces([{ ...def, role: 'owner' }]);
-              setCurrentWorkspace({ ...def, role: 'owner' });
+              try {
+                  // Create default Personal Workspace if list is empty but table exists
+                  const def = await workspaceService.create(user.id, 'Meu Espaço Pessoal', 'personal');
+                  setWorkspaces([{ ...def, role: 'owner' }]);
+                  setCurrentWorkspace({ ...def, role: 'owner' });
+              } catch (createError) {
+                   // Fallback if creation fails (e.g. table doesn't exist)
+                   console.warn("Failed to create default workspace, using legacy mode.");
+                   throw createError;
+              }
           } else {
               setWorkspaces(list);
-              // Select first or previous? For now first.
               if (!currentWorkspace) {
                 setCurrentWorkspace(list[0]);
               }
           }
       } catch (error) {
-          console.error("Failed to load workspaces", error);
+          console.warn("Failed to load workspaces (Legacy Mode Activated)", error);
+          // FALLBACK: Legacy Mode (Database doesn't have workspace tables yet)
+          // We create a "Virtual" workspace to allow the app to function with old data
+          const legacyWorkspace: Workspace & { role: Role } = {
+              id: 'legacy',
+              name: 'Meu Espaço',
+              type: 'personal',
+              ownerId: user.id,
+              role: 'owner'
+          };
+          setWorkspaces([legacyWorkspace]);
+          setCurrentWorkspace(legacyWorkspace);
       }
   };
 
@@ -123,12 +140,12 @@ const App: React.FC = () => {
       const [
         catsRes, tagsRes, txsRes, clientsRes, projectsRes, costsRes
       ] = await Promise.allSettled([
-        categoryService.fetchAll(workspaceId),
-        tagService.fetchAll(workspaceId),
-        transactionService.fetchAll(workspaceId),
-        clientService.fetchAll(workspaceId),
-        projectService.fetchAll(workspaceId),
-        fixedCostService.fetchAll(workspaceId)
+        categoryService.fetchAll(user.id, workspaceId),
+        tagService.fetchAll(user.id, workspaceId),
+        transactionService.fetchAll(user.id, workspaceId),
+        clientService.fetchAll(user.id, workspaceId),
+        projectService.fetchAll(user.id, workspaceId),
+        fixedCostService.fetchAll(user.id, workspaceId)
       ]);
 
       const extract = <T,>(res: PromiseSettledResult<T>, fallback: T): T => 
@@ -189,7 +206,7 @@ const App: React.FC = () => {
           setInitialLoad(true); // Trigger loading screen while switching
       } catch (e) {
           console.error(e);
-          alert('Erro ao criar espaço.');
+          alert('Erro ao criar espaço. O banco de dados pode estar desatualizado.');
       }
   };
 
@@ -539,6 +556,12 @@ const App: React.FC = () => {
             {!canEdit && (
                  <div className="bg-blue-50 border border-blue-200 text-blue-800 p-3 rounded-xl flex items-center gap-2 text-sm font-bold">
                     <Eye size={16} /> Modo Visualizador: Você não pode editar dados neste espaço.
+                 </div>
+            )}
+            
+            {currentWorkspace?.id === 'legacy' && (
+                 <div className="bg-orange-50 border border-orange-200 text-orange-800 p-3 rounded-xl flex items-center gap-2 text-sm font-bold">
+                    <AlertTriangle size={16} /> Modo Legado Ativado: Algumas funcionalidades de equipe podem estar indisponíveis.
                  </div>
             )}
 

@@ -49,6 +49,11 @@ const handleError = (error: any, context: string) => {
   if (error.code === '22P02') {
     throw new Error('Dados inválidos (UUID incorreto).');
   }
+  
+  // Ignore 404 for workspaces table, it means legacy mode
+  if (context === 'listOwnedWorkspaces' && error.code === '404') {
+      throw error; // Rethrow to let App.tsx handle legacy fallback
+  }
 
   throw new Error(error.message || 'Erro desconhecido na API.');
 };
@@ -59,8 +64,6 @@ export const workspaceService = {
   // Lista todos os workspaces que o usuário é membro ou dono
   async listByUser(userId: string, email: string) {
     // Busca workspaces onde sou dono OU onde estou na lista de membros
-    // Nota: Em uma implementação real com RLS (Row Level Security), bastaria select('*').
-    // Aqui simulamos buscando nas duas tabelas.
     
     // 1. Workspaces que sou dono
     const { data: owned, error: ownerError } = await supabase
@@ -71,12 +74,21 @@ export const workspaceService = {
     if (ownerError) handleError(ownerError, 'listOwnedWorkspaces');
 
     // 2. Workspaces que sou membro
-    const { data: memberOf, error: memberError } = await supabase
-        .from('workspace_members')
-        .select('workspace_id, role, workspaces(*)')
-        .eq('email', email); // Usamos email para vincular convites
-    
-    if (memberError) handleError(memberError, 'listMemberWorkspaces');
+    // Wrap in try-catch in case workspace_members table doesn't exist either
+    let memberOf = [];
+    try {
+        const { data, error: memberError } = await supabase
+            .from('workspace_members')
+            .select('workspace_id, role, workspaces(*)')
+            .eq('email', email); // Usamos email para vincular convites
+        
+        if (memberError && memberError.code !== '42P01') { // Ignore if table doesn't exist
+             handleError(memberError, 'listMemberWorkspaces');
+        }
+        memberOf = data || [];
+    } catch (e) {
+        console.warn("Could not load member workspaces, likely missing table.");
+    }
 
     // Combinar e dedublicar
     const workspaces: (Workspace & { role: Role })[] = [];
@@ -141,6 +153,8 @@ export const workspaceService = {
   },
 
   async inviteMember(workspaceId: string, email: string, role: Role) {
+    if (workspaceId === 'legacy') throw new Error("Não é possível convidar membros no modo legado.");
+
     // Verifica se já existe
     const { data: existing } = await supabase
         .from('workspace_members')
@@ -177,6 +191,8 @@ export const workspaceService = {
 
 export const seedDatabase = async (userId: string, workspaceId: string, type: AccountType) => {
   try {
+    if (workspaceId === 'legacy') return; // Do not seed in legacy mode
+
     // Define categorias baseadas no tipo de workspace
     let defaultCategories = [];
     let defaultTags = [];
@@ -207,7 +223,6 @@ export const seedDatabase = async (userId: string, workspaceId: string, type: Ac
     }
 
     // Inserção direta (simplificada para novos workspaces)
-    // Em produção, verificar duplicidade, mas aqui assumimos workspace novo
     if (defaultCategories.length > 0) {
         await supabase.from('categories').insert(defaultCategories);
     }
@@ -222,8 +237,15 @@ export const seedDatabase = async (userId: string, workspaceId: string, type: Ac
 
 // --- TRANSACTIONS (UPDATED to use workspace_id) ---
 export const transactionService = {
-  async fetchAll(workspaceId: string) {
-    const { data, error } = await supabase.from('transactions').select('*').eq('workspace_id', workspaceId);
+  async fetchAll(userId: string, workspaceId: string) {
+    let query = supabase.from('transactions').select('*');
+    if (workspaceId === 'legacy') {
+        query = query.eq('user_id', userId);
+    } else {
+        query = query.eq('workspace_id', workspaceId);
+    }
+    
+    const { data, error } = await query;
     if (error) handleError(error, 'fetchAllTransactions');
     
     return (data || []).map((t: any) => ({
@@ -268,8 +290,8 @@ export const transactionService = {
 
   async create(userId: string, tx: Omit<Transaction, 'id'>) {
     const payload = sanitizePayload({
-      user_id: userId, // Audit
-      workspace_id: tx.workspaceId,
+      user_id: userId, 
+      workspace_id: tx.workspaceId === 'legacy' ? null : tx.workspaceId,
       type: tx.type,
       amount: tx.amount,
       description: tx.description,
@@ -332,14 +354,24 @@ export const transactionService = {
 
 // --- CLIENTS ---
 export const clientService = {
-  async fetchAll(workspaceId: string) {
-    const { data, error } = await supabase.from('clients').select('*').eq('workspace_id', workspaceId);
+  async fetchAll(userId: string, workspaceId: string) {
+    let query = supabase.from('clients').select('*');
+    if (workspaceId === 'legacy') {
+        query = query.eq('user_id', userId);
+    } else {
+        query = query.eq('workspace_id', workspaceId);
+    }
+    const { data, error } = await query;
     if (error) handleError(error, 'fetchAllClients');
     return (data || []) as Client[];
   },
 
   async create(userId: string, workspaceId: string, client: Omit<Client, 'id'>) {
-    const payload = sanitizePayload({ ...client, user_id: userId, workspace_id: workspaceId });
+    const payload = sanitizePayload({ 
+        ...client, 
+        user_id: userId, 
+        workspace_id: workspaceId === 'legacy' ? null : workspaceId 
+    });
     const { data, error } = await supabase.from('clients').insert([payload]).select().single();
     if (error) handleError(error, 'createClient');
     return data as Client;
@@ -362,8 +394,14 @@ export const clientService = {
 
 // --- PROJECTS ---
 export const projectService = {
-  async fetchAll(workspaceId: string) {
-    const { data, error } = await supabase.from('projects').select('*').eq('workspace_id', workspaceId);
+  async fetchAll(userId: string, workspaceId: string) {
+    let query = supabase.from('projects').select('*');
+    if (workspaceId === 'legacy') {
+        query = query.eq('user_id', userId);
+    } else {
+        query = query.eq('workspace_id', workspaceId);
+    }
+    const { data, error } = await query;
     if (error) handleError(error, 'fetchAllProjects');
     
     return (data || []).map((p: any) => ({
@@ -378,7 +416,7 @@ export const projectService = {
   async create(userId: string, workspaceId: string, project: Omit<Project, 'id'>) {
     const payload = sanitizePayload({
       user_id: userId,
-      workspace_id: workspaceId,
+      workspace_id: workspaceId === 'legacy' ? null : workspaceId,
       name: project.name,
       client_id: project.clientId || null,
       value: project.value,
@@ -436,14 +474,26 @@ export const projectService = {
 
 // --- CATEGORIES & TAGS & COSTS ---
 export const categoryService = {
-  async fetchAll(workspaceId: string) {
-    const { data, error } = await supabase.from('categories').select('*').eq('workspace_id', workspaceId);
+  async fetchAll(userId: string, workspaceId: string) {
+    let query = supabase.from('categories').select('*');
+    if (workspaceId === 'legacy') {
+        query = query.eq('user_id', userId);
+    } else {
+        query = query.eq('workspace_id', workspaceId);
+    }
+    const { data, error } = await query;
     if (error) handleError(error, 'fetchAllCategories');
     
     return (data || []) as (Category & { scope: string })[];
   },
   async create(userId: string, workspaceId: string, cat: Category, scope: AccountType) {
-    const payload = sanitizePayload({ user_id: userId, workspace_id: workspaceId, name: cat.name, type: cat.type, scope });
+    const payload = sanitizePayload({ 
+        user_id: userId, 
+        workspace_id: workspaceId === 'legacy' ? null : workspaceId, 
+        name: cat.name, 
+        type: cat.type, 
+        scope 
+    });
     const { data, error } = await supabase.from('categories').insert([payload]).select().single();
     if (error) handleError(error, 'createCategory');
     return data;
@@ -457,14 +507,26 @@ export const categoryService = {
 };
 
 export const tagService = {
-  async fetchAll(workspaceId: string) {
-    const { data, error } = await supabase.from('tags').select('*').eq('workspace_id', workspaceId);
+  async fetchAll(userId: string, workspaceId: string) {
+    let query = supabase.from('tags').select('*');
+    if (workspaceId === 'legacy') {
+        query = query.eq('user_id', userId);
+    } else {
+        query = query.eq('workspace_id', workspaceId);
+    }
+    const { data, error } = await query;
     if (error) handleError(error, 'fetchAllTags');
 
     return (data || []) as (Tag & { scope: string })[];
   },
   async create(userId: string, workspaceId: string, tag: Tag, scope: AccountType) {
-    const payload = sanitizePayload({ user_id: userId, workspace_id: workspaceId, label: tag.label, color: tag.color, scope });
+    const payload = sanitizePayload({ 
+        user_id: userId, 
+        workspace_id: workspaceId === 'legacy' ? null : workspaceId, 
+        label: tag.label, 
+        color: tag.color, 
+        scope 
+    });
     const { data, error } = await supabase.from('tags').insert([payload]).select().single();
     if (error) handleError(error, 'createTag');
     return data;
@@ -478,8 +540,14 @@ export const tagService = {
 };
 
 export const fixedCostService = {
-  async fetchAll(workspaceId: string) {
-    const { data, error } = await supabase.from('fixed_costs').select('*').eq('workspace_id', workspaceId);
+  async fetchAll(userId: string, workspaceId: string) {
+    let query = supabase.from('fixed_costs').select('*');
+    if (workspaceId === 'legacy') {
+        query = query.eq('user_id', userId);
+    } else {
+        query = query.eq('workspace_id', workspaceId);
+    }
+    const { data, error } = await query;
     if (error) { console.warn(error); return []; }
     return (data || []).map((d: any) => ({
       id: d.id, 
@@ -489,7 +557,13 @@ export const fixedCostService = {
     }));
   },
   async create(userId: string, workspaceId: string, cost: FixedCostTemplate) {
-    const payload = sanitizePayload({ user_id: userId, workspace_id: workspaceId, name: cost.name, value: cost.defaultAmount, due_day: cost.dayOfMonth });
+    const payload = sanitizePayload({ 
+        user_id: userId, 
+        workspace_id: workspaceId === 'legacy' ? null : workspaceId, 
+        name: cost.name, 
+        value: cost.defaultAmount, 
+        due_day: cost.dayOfMonth 
+    });
     const { data, error } = await supabase.from('fixed_costs').insert([payload]).select().single();
     if (error) handleError(error, 'createFixedCost');
     return { id: data.id, name: data.name, defaultAmount: Number(data.value), dayOfMonth: data.due_day };
