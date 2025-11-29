@@ -159,16 +159,24 @@ const App: React.FC = () => {
         const linkedProject = projects.find(p => p.id === savedTx.projectId);
         
         if (linkedProject) {
-            // Check for discrepancies in Value or Date
-            // We do NOT sync description -> name automatically to preserve project naming
+            // Determine potentially new project name from description
+            // If description starts with "Projeto: ", strip it for the name sync
+            let newProjectName = savedTx.description;
+            if (newProjectName.startsWith('Projeto: ')) {
+                newProjectName = newProjectName.replace('Projeto: ', '');
+            }
+
+            // Check for discrepancies in Name, Value or Date
             const shouldUpdate = 
                 linkedProject.value !== savedTx.amount || 
-                linkedProject.startDate.getTime() !== savedTx.date.getTime();
+                linkedProject.startDate.getTime() !== savedTx.date.getTime() ||
+                linkedProject.name !== newProjectName;
 
             if (shouldUpdate) {
                 const updatedProj = await projectService.update(linkedProject.id, {
                     value: savedTx.amount,
-                    startDate: savedTx.date
+                    startDate: savedTx.date,
+                    name: newProjectName
                 });
                 setProjects(prev => prev.map(p => p.id === linkedProject.id ? updatedProj : p));
             }
@@ -193,6 +201,7 @@ const App: React.FC = () => {
     // 2. Automatically Update Linked Transaction if exists (SYNC FORWARD: Project -> Transaction)
     const linkedTx = transactions.find(t => t.projectId === id);
     if (linkedTx) {
+      // Force "Projeto: Name" format for consistency
       const newDescription = p.name ? `Projeto: ${p.name}` : linkedTx.description;
       const newAmount = p.value !== undefined ? Number(p.value) : linkedTx.amount;
       const newDate = p.startDate ? new Date(p.startDate) : linkedTx.date;
