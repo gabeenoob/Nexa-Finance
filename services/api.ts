@@ -56,30 +56,44 @@ const handleError = (error: any, context: string) => {
 
 export const seedDatabase = async (userId: string) => {
   try {
-    const { count } = await supabase.from('categories').select('*', { count: 'exact', head: true }).eq('user_id', userId);
-    if (count && count > 0) return;
-
-    // Categorias Padrão Minimalistas
-    await supabase.from('categories').insert([
-        // Pessoal
+    // 1. Definir Padrões Exatos
+    const defaultCategories = [
         { user_id: userId, name: 'Moradia', type: 'expense', scope: 'personal' },
         { user_id: userId, name: 'Alimentação', type: 'expense', scope: 'personal' },
         { user_id: userId, name: 'Lazer', type: 'expense', scope: 'personal' },
         { user_id: userId, name: 'Investimento', type: 'expense', scope: 'personal' },
         
-        // Empresarial
         { user_id: userId, name: 'Vendas', type: 'income', scope: 'business' },
         { user_id: userId, name: 'Projetos', type: 'income', scope: 'business' },
         { user_id: userId, name: 'Custos Fixos', type: 'expense', scope: 'business' },
         { user_id: userId, name: 'Operacional', type: 'expense', scope: 'business' }
-    ]);
-    
-    // Tags Padrão Minimalistas
-    await supabase.from('tags').insert([
+    ];
+
+    const defaultTags = [
         { user_id: userId, label: 'Urgente', color: 'red', scope: 'business' },
         { user_id: userId, label: 'Recorrente', color: 'blue', scope: 'business' },
         { user_id: userId, label: 'Pago', color: 'green', scope: 'business' }
-    ]);
+    ];
+
+    // 2. Buscar existentes para evitar duplicatas (Idempotência)
+    const { data: existingCats } = await supabase.from('categories').select('name, scope').eq('user_id', userId);
+    const { data: existingTags } = await supabase.from('tags').select('label, scope').eq('user_id', userId);
+
+    const existingCatSet = new Set(existingCats?.map(c => `${c.scope}:${c.name}`));
+    const existingTagSet = new Set(existingTags?.map(t => `${t.scope}:${t.label}`));
+
+    // 3. Filtrar apenas os que faltam
+    const catsToInsert = defaultCategories.filter(c => !existingCatSet.has(`${c.scope}:${c.name}`));
+    const tagsToInsert = defaultTags.filter(t => !existingTagSet.has(`${t.scope}:${t.label}`));
+
+    // 4. Inserir em lote seguro
+    if (catsToInsert.length > 0) {
+        await supabase.from('categories').insert(catsToInsert);
+    }
+    if (tagsToInsert.length > 0) {
+        await supabase.from('tags').insert(tagsToInsert);
+    }
+
   } catch (e) {
     console.warn("Erro ao semear banco:", e);
   }
@@ -307,7 +321,19 @@ export const categoryService = {
   async fetchAll(userId: string) {
     const { data, error } = await supabase.from('categories').select('*').eq('user_id', userId);
     if (error) handleError(error, 'fetchAllCategories');
-    return (data || []) as (Category & { scope: string })[];
+    
+    const rawList = (data || []) as (Category & { scope: string })[];
+    
+    // Deduplicação Visual (Client-Side Fix para dados já duplicados no banco)
+    const seen = new Set();
+    const uniqueList = rawList.filter(item => {
+        const key = `${item.scope}:${item.name}`;
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+    });
+
+    return uniqueList;
   },
   async create(userId: string, cat: Category, scope: AccountType) {
     const payload = sanitizePayload({ user_id: userId, name: cat.name, type: cat.type, scope });
@@ -327,7 +353,19 @@ export const tagService = {
   async fetchAll(userId: string) {
     const { data, error } = await supabase.from('tags').select('*').eq('user_id', userId);
     if (error) handleError(error, 'fetchAllTags');
-    return (data || []) as (Tag & { scope: string })[];
+
+    const rawList = (data || []) as (Tag & { scope: string })[];
+
+    // Deduplicação Visual
+    const seen = new Set();
+    const uniqueList = rawList.filter(item => {
+        const key = `${item.scope}:${item.label}`;
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+    });
+    
+    return uniqueList;
   },
   async create(userId: string, tag: Tag, scope: AccountType) {
     const payload = sanitizePayload({ user_id: userId, label: tag.label, color: tag.color, scope });
