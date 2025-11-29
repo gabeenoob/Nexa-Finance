@@ -1,4 +1,5 @@
 
+
 import React, { useState, useEffect } from 'react';
 import { X, Calendar, Hash, ArrowRightLeft, ArrowUpCircle, ArrowDownCircle, Trash2 } from 'lucide-react';
 import { Transaction, Category, Tag } from '../types';
@@ -6,7 +7,7 @@ import { Transaction, Category, Tag } from '../types';
 interface TransactionModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSave: (transaction: Omit<Transaction, 'id' | 'accountId'>, id?: string) => void;
+  onSave: (transaction: Omit<Transaction, 'id' | 'accountId' | 'workspaceId'>, id?: string) => void;
   onDelete?: (id: string) => void;
   initialData?: Transaction | null;
   categories: Category[];

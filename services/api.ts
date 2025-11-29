@@ -1,6 +1,7 @@
 
+
 import { supabase } from '../lib/supabase';
-import { Transaction, Client, Project, Category, Tag, AccountType, FixedCostTemplate } from '../types';
+import { Transaction, Client, Project, Category, Tag, AccountType, FixedCostTemplate, Workspace, WorkspaceMember, Role } from '../types';
 
 // --- UTILITÁRIOS DE LIMPEZA DE DADOS ---
 
@@ -40,7 +41,7 @@ const handleError = (error: any, context: string) => {
     return;
   }
   if (error.code === '42501') { 
-    throw new Error('Permissão negada. Verifique se você é o dono deste registro.');
+    throw new Error('Permissão negada. Você não tem permissão para realizar esta ação neste espaço.');
   }
   if (error.code === '23503') {
     throw new Error('Não é possível apagar este item pois ele está vinculado a outros registros (Erro de Integridade).');
@@ -52,46 +53,166 @@ const handleError = (error: any, context: string) => {
   throw new Error(error.message || 'Erro desconhecido na API.');
 };
 
-// --- SERVIÇOS ---
+// --- WORKSPACES SERVICE (NEW) ---
 
-export const seedDatabase = async (userId: string) => {
+export const workspaceService = {
+  // Lista todos os workspaces que o usuário é membro ou dono
+  async listByUser(userId: string, email: string) {
+    // Busca workspaces onde sou dono OU onde estou na lista de membros
+    // Nota: Em uma implementação real com RLS (Row Level Security), bastaria select('*').
+    // Aqui simulamos buscando nas duas tabelas.
+    
+    // 1. Workspaces que sou dono
+    const { data: owned, error: ownerError } = await supabase
+        .from('workspaces')
+        .select('*')
+        .eq('owner_id', userId);
+
+    if (ownerError) handleError(ownerError, 'listOwnedWorkspaces');
+
+    // 2. Workspaces que sou membro
+    const { data: memberOf, error: memberError } = await supabase
+        .from('workspace_members')
+        .select('workspace_id, role, workspaces(*)')
+        .eq('email', email); // Usamos email para vincular convites
+    
+    if (memberError) handleError(memberError, 'listMemberWorkspaces');
+
+    // Combinar e dedublicar
+    const workspaces: (Workspace & { role: Role })[] = [];
+    const ids = new Set();
+
+    // Adiciona Owned (Role = Owner)
+    owned?.forEach((w: any) => {
+        if (!ids.has(w.id)) {
+            workspaces.push({
+                id: w.id,
+                name: w.name,
+                type: w.type || 'personal',
+                ownerId: w.owner_id,
+                role: 'owner'
+            });
+            ids.add(w.id);
+        }
+    });
+
+    // Adiciona MemberOf
+    memberOf?.forEach((m: any) => {
+        const w = m.workspaces;
+        if (w && !ids.has(w.id)) {
+            workspaces.push({
+                id: w.id,
+                name: w.name,
+                type: w.type || 'business',
+                ownerId: w.owner_id,
+                role: m.role as Role
+            });
+            ids.add(w.id);
+        }
+    });
+
+    return workspaces;
+  },
+
+  async create(userId: string, name: string, type: AccountType) {
+    // Cria o workspace
+    const { data: workspace, error } = await supabase
+        .from('workspaces')
+        .insert([{ owner_id: userId, name, type }])
+        .select()
+        .single();
+    
+    if (error) handleError(error, 'createWorkspace');
+
+    // Semeia dados padrão para este novo workspace
+    await seedDatabase(userId, workspace.id, type);
+
+    return workspace as Workspace;
+  },
+
+  async getMembers(workspaceId: string) {
+    const { data, error } = await supabase
+        .from('workspace_members')
+        .select('*')
+        .eq('workspace_id', workspaceId);
+    
+    if (error) handleError(error, 'getWorkspaceMembers');
+    return data as WorkspaceMember[];
+  },
+
+  async inviteMember(workspaceId: string, email: string, role: Role) {
+    // Verifica se já existe
+    const { data: existing } = await supabase
+        .from('workspace_members')
+        .select('id')
+        .eq('workspace_id', workspaceId)
+        .eq('email', email)
+        .single();
+    
+    if (existing) throw new Error('Este usuário já é membro do espaço.');
+
+    const { data, error } = await supabase
+        .from('workspace_members')
+        .insert([{ workspace_id: workspaceId, email, role }])
+        .select()
+        .single();
+    
+    if (error) handleError(error, 'inviteMember');
+    return data;
+  },
+
+  async removeMember(memberId: string) {
+    const { error } = await supabase.from('workspace_members').delete().eq('id', memberId);
+    if (error) handleError(error, 'removeMember');
+  },
+
+  async updateMemberRole(memberId: string, newRole: Role) {
+    const { error } = await supabase.from('workspace_members').update({ role: newRole }).eq('id', memberId);
+    if (error) handleError(error, 'updateMemberRole');
+  }
+};
+
+
+// --- SEED DATABASE (UPDATED) ---
+
+export const seedDatabase = async (userId: string, workspaceId: string, type: AccountType) => {
   try {
-    // 1. Definir Padrões Exatos
-    const defaultCategories = [
-        { user_id: userId, name: 'Moradia', type: 'expense', scope: 'personal' },
-        { user_id: userId, name: 'Alimentação', type: 'expense', scope: 'personal' },
-        { user_id: userId, name: 'Lazer', type: 'expense', scope: 'personal' },
-        { user_id: userId, name: 'Investimento', type: 'expense', scope: 'personal' },
-        
-        { user_id: userId, name: 'Vendas', type: 'income', scope: 'business' },
-        { user_id: userId, name: 'Projetos', type: 'income', scope: 'business' },
-        { user_id: userId, name: 'Custos Fixos', type: 'expense', scope: 'business' },
-        { user_id: userId, name: 'Operacional', type: 'expense', scope: 'business' }
-    ];
+    // Define categorias baseadas no tipo de workspace
+    let defaultCategories = [];
+    let defaultTags = [];
 
-    const defaultTags = [
-        { user_id: userId, label: 'Urgente', color: 'red', scope: 'business' },
-        { user_id: userId, label: 'Recorrente', color: 'blue', scope: 'business' },
-        { user_id: userId, label: 'Pago', color: 'green', scope: 'business' }
-    ];
-
-    // 2. Buscar existentes para evitar duplicatas (Idempotência)
-    const { data: existingCats } = await supabase.from('categories').select('name, scope').eq('user_id', userId);
-    const { data: existingTags } = await supabase.from('tags').select('label, scope').eq('user_id', userId);
-
-    const existingCatSet = new Set(existingCats?.map(c => `${c.scope}:${c.name}`));
-    const existingTagSet = new Set(existingTags?.map(t => `${t.scope}:${t.label}`));
-
-    // 3. Filtrar apenas os que faltam
-    const catsToInsert = defaultCategories.filter(c => !existingCatSet.has(`${c.scope}:${c.name}`));
-    const tagsToInsert = defaultTags.filter(t => !existingTagSet.has(`${t.scope}:${t.label}`));
-
-    // 4. Inserir em lote seguro
-    if (catsToInsert.length > 0) {
-        await supabase.from('categories').insert(catsToInsert);
+    if (type === 'personal') {
+         defaultCategories = [
+            { workspace_id: workspaceId, user_id: userId, name: 'Moradia', type: 'expense', scope: 'personal' },
+            { workspace_id: workspaceId, user_id: userId, name: 'Alimentação', type: 'expense', scope: 'personal' },
+            { workspace_id: workspaceId, user_id: userId, name: 'Lazer', type: 'expense', scope: 'personal' },
+            { workspace_id: workspaceId, user_id: userId, name: 'Investimento', type: 'expense', scope: 'personal' },
+        ];
+        defaultTags = [
+            { workspace_id: workspaceId, user_id: userId, label: 'Urgente', color: 'red', scope: 'personal' },
+            { workspace_id: workspaceId, user_id: userId, label: 'Pago', color: 'green', scope: 'personal' }
+        ];
+    } else {
+        defaultCategories = [
+            { workspace_id: workspaceId, user_id: userId, name: 'Vendas', type: 'income', scope: 'business' },
+            { workspace_id: workspaceId, user_id: userId, name: 'Projetos', type: 'income', scope: 'business' },
+            { workspace_id: workspaceId, user_id: userId, name: 'Custos Fixos', type: 'expense', scope: 'business' },
+            { workspace_id: workspaceId, user_id: userId, name: 'Operacional', type: 'expense', scope: 'business' }
+        ];
+        defaultTags = [
+            { workspace_id: workspaceId, user_id: userId, label: 'Urgente', color: 'red', scope: 'business' },
+            { workspace_id: workspaceId, user_id: userId, label: 'Recorrente', color: 'blue', scope: 'business' },
+            { workspace_id: workspaceId, user_id: userId, label: 'Pago', color: 'green', scope: 'business' }
+        ];
     }
-    if (tagsToInsert.length > 0) {
-        await supabase.from('tags').insert(tagsToInsert);
+
+    // Inserção direta (simplificada para novos workspaces)
+    // Em produção, verificar duplicidade, mas aqui assumimos workspace novo
+    if (defaultCategories.length > 0) {
+        await supabase.from('categories').insert(defaultCategories);
+    }
+    if (defaultTags.length > 0) {
+        await supabase.from('tags').insert(defaultTags);
     }
 
   } catch (e) {
@@ -99,10 +220,10 @@ export const seedDatabase = async (userId: string) => {
   }
 };
 
-// --- TRANSACTIONS ---
+// --- TRANSACTIONS (UPDATED to use workspace_id) ---
 export const transactionService = {
-  async fetchAll(userId: string) {
-    const { data, error } = await supabase.from('transactions').select('*').eq('user_id', userId);
+  async fetchAll(workspaceId: string) {
+    const { data, error } = await supabase.from('transactions').select('*').eq('workspace_id', workspaceId);
     if (error) handleError(error, 'fetchAllTransactions');
     
     return (data || []).map((t: any) => ({
@@ -114,16 +235,15 @@ export const transactionService = {
       category: t.category,
       tags: Array.isArray(t.tags) ? t.tags : [],
       accountId: t.account_id || 'personal',
+      workspaceId: t.workspace_id,
       location: t.location,
       projectId: t.project_id
     })) as Transaction[];
   },
 
-  // Busca específica para garantir sincronia - USANDO maybeSingle para evitar erros 406
   async fetchByProjectId(projectId: string) {
     const { data, error } = await supabase.from('transactions').select('*').eq('project_id', projectId).maybeSingle();
     
-    // maybeSingle retorna null sem erro se não achar, mas retorna erro se tiver mais de um (o que não deve acontecer)
     if (error) {
         console.warn("Erro ao buscar transação por projeto:", error);
         return null;
@@ -140,6 +260,7 @@ export const transactionService = {
       category: data.category,
       tags: Array.isArray(data.tags) ? data.tags : [],
       accountId: data.account_id || 'personal',
+      workspaceId: data.workspace_id,
       location: data.location,
       projectId: data.project_id
     } as Transaction;
@@ -147,7 +268,8 @@ export const transactionService = {
 
   async create(userId: string, tx: Omit<Transaction, 'id'>) {
     const payload = sanitizePayload({
-      user_id: userId,
+      user_id: userId, // Audit
+      workspace_id: tx.workspaceId,
       type: tx.type,
       amount: tx.amount,
       description: tx.description,
@@ -156,7 +278,6 @@ export const transactionService = {
       tags: tx.tags,
       account_id: tx.accountId,
       location: tx.location,
-      // Create: Force null if undefined
       project_id: tx.projectId || null 
     });
 
@@ -173,7 +294,6 @@ export const transactionService = {
   },
 
   async update(id: string, tx: Partial<Transaction>) {
-    // Update: Only include foreign key if it's explicitly defined in the update object
     const rawPayload: any = {
       type: tx.type,
       amount: tx.amount,
@@ -212,14 +332,14 @@ export const transactionService = {
 
 // --- CLIENTS ---
 export const clientService = {
-  async fetchAll(userId: string) {
-    const { data, error } = await supabase.from('clients').select('*').eq('user_id', userId);
+  async fetchAll(workspaceId: string) {
+    const { data, error } = await supabase.from('clients').select('*').eq('workspace_id', workspaceId);
     if (error) handleError(error, 'fetchAllClients');
     return (data || []) as Client[];
   },
 
-  async create(userId: string, client: Omit<Client, 'id'>) {
-    const payload = sanitizePayload({ ...client, user_id: userId });
+  async create(userId: string, workspaceId: string, client: Omit<Client, 'id'>) {
+    const payload = sanitizePayload({ ...client, user_id: userId, workspace_id: workspaceId });
     const { data, error } = await supabase.from('clients').insert([payload]).select().single();
     if (error) handleError(error, 'createClient');
     return data as Client;
@@ -242,8 +362,8 @@ export const clientService = {
 
 // --- PROJECTS ---
 export const projectService = {
-  async fetchAll(userId: string) {
-    const { data, error } = await supabase.from('projects').select('*').eq('user_id', userId);
+  async fetchAll(workspaceId: string) {
+    const { data, error } = await supabase.from('projects').select('*').eq('workspace_id', workspaceId);
     if (error) handleError(error, 'fetchAllProjects');
     
     return (data || []).map((p: any) => ({
@@ -252,17 +372,16 @@ export const projectService = {
       startDate: new Date(p.start_date),
       deadline: p.deadline ? new Date(p.deadline) : undefined,
       value: Number(p.value),
-      // Cost removed
     })) as Project[];
   },
 
-  async create(userId: string, project: Omit<Project, 'id'>) {
+  async create(userId: string, workspaceId: string, project: Omit<Project, 'id'>) {
     const payload = sanitizePayload({
       user_id: userId,
+      workspace_id: workspaceId,
       name: project.name,
       client_id: project.clientId || null,
       value: project.value,
-      // Cost removed from payload
       description: project.description,
       start_date: project.startDate.toISOString(),
       deadline: project.deadline?.toISOString() || null
@@ -284,7 +403,6 @@ export const projectService = {
     const rawPayload: any = {
       name: project.name,
       value: project.value,
-      // Cost removed from update payload
       description: project.description,
       start_date: project.startDate?.toISOString(),
       deadline: project.deadline?.toISOString() || null
@@ -318,25 +436,14 @@ export const projectService = {
 
 // --- CATEGORIES & TAGS & COSTS ---
 export const categoryService = {
-  async fetchAll(userId: string) {
-    const { data, error } = await supabase.from('categories').select('*').eq('user_id', userId);
+  async fetchAll(workspaceId: string) {
+    const { data, error } = await supabase.from('categories').select('*').eq('workspace_id', workspaceId);
     if (error) handleError(error, 'fetchAllCategories');
     
-    const rawList = (data || []) as (Category & { scope: string })[];
-    
-    // Deduplicação Visual (Client-Side Fix para dados já duplicados no banco)
-    const seen = new Set();
-    const uniqueList = rawList.filter(item => {
-        const key = `${item.scope}:${item.name}`;
-        if (seen.has(key)) return false;
-        seen.add(key);
-        return true;
-    });
-
-    return uniqueList;
+    return (data || []) as (Category & { scope: string })[];
   },
-  async create(userId: string, cat: Category, scope: AccountType) {
-    const payload = sanitizePayload({ user_id: userId, name: cat.name, type: cat.type, scope });
+  async create(userId: string, workspaceId: string, cat: Category, scope: AccountType) {
+    const payload = sanitizePayload({ user_id: userId, workspace_id: workspaceId, name: cat.name, type: cat.type, scope });
     const { data, error } = await supabase.from('categories').insert([payload]).select().single();
     if (error) handleError(error, 'createCategory');
     return data;
@@ -350,25 +457,14 @@ export const categoryService = {
 };
 
 export const tagService = {
-  async fetchAll(userId: string) {
-    const { data, error } = await supabase.from('tags').select('*').eq('user_id', userId);
+  async fetchAll(workspaceId: string) {
+    const { data, error } = await supabase.from('tags').select('*').eq('workspace_id', workspaceId);
     if (error) handleError(error, 'fetchAllTags');
 
-    const rawList = (data || []) as (Tag & { scope: string })[];
-
-    // Deduplicação Visual
-    const seen = new Set();
-    const uniqueList = rawList.filter(item => {
-        const key = `${item.scope}:${item.label}`;
-        if (seen.has(key)) return false;
-        seen.add(key);
-        return true;
-    });
-    
-    return uniqueList;
+    return (data || []) as (Tag & { scope: string })[];
   },
-  async create(userId: string, tag: Tag, scope: AccountType) {
-    const payload = sanitizePayload({ user_id: userId, label: tag.label, color: tag.color, scope });
+  async create(userId: string, workspaceId: string, tag: Tag, scope: AccountType) {
+    const payload = sanitizePayload({ user_id: userId, workspace_id: workspaceId, label: tag.label, color: tag.color, scope });
     const { data, error } = await supabase.from('tags').insert([payload]).select().single();
     if (error) handleError(error, 'createTag');
     return data;
@@ -382,8 +478,8 @@ export const tagService = {
 };
 
 export const fixedCostService = {
-  async fetchAll(userId: string) {
-    const { data, error } = await supabase.from('fixed_costs').select('*').eq('user_id', userId);
+  async fetchAll(workspaceId: string) {
+    const { data, error } = await supabase.from('fixed_costs').select('*').eq('workspace_id', workspaceId);
     if (error) { console.warn(error); return []; }
     return (data || []).map((d: any) => ({
       id: d.id, 
@@ -392,8 +488,8 @@ export const fixedCostService = {
       dayOfMonth: d.due_day || 1
     }));
   },
-  async create(userId: string, cost: FixedCostTemplate) {
-    const payload = sanitizePayload({ user_id: userId, name: cost.name, value: cost.defaultAmount, due_day: cost.dayOfMonth });
+  async create(userId: string, workspaceId: string, cost: FixedCostTemplate) {
+    const payload = sanitizePayload({ user_id: userId, workspace_id: workspaceId, name: cost.name, value: cost.defaultAmount, due_day: cost.dayOfMonth });
     const { data, error } = await supabase.from('fixed_costs').insert([payload]).select().single();
     if (error) handleError(error, 'createFixedCost');
     return { id: data.id, name: data.name, defaultAmount: Number(data.value), dayOfMonth: data.due_day };

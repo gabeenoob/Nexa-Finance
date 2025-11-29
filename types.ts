@@ -1,6 +1,27 @@
 
 
-export type AccountType = 'personal' | 'business';
+export type AccountType = 'personal' | 'business'; // Mantido para retrocompatibilidade visual, mas agora vinculado ao Workspace type
+export type Role = 'owner' | 'admin' | 'viewer';
+
+export interface Workspace {
+  id: string;
+  name: string;
+  type: AccountType;
+  ownerId: string;
+  created_at?: string;
+}
+
+export interface WorkspaceMember {
+  id: string;
+  workspaceId: string;
+  userId: string | null; // Pode ser null se for um convite pendente por email
+  email: string;
+  role: Role;
+  user?: {
+    full_name?: string;
+    avatar_url?: string;
+  }
+}
 
 export interface Tag {
   id: string;
@@ -29,7 +50,8 @@ export interface Transaction {
   };
   source?: string; 
   destination?: string;
-  accountId: AccountType;
+  accountId: AccountType; // Legacy visual field
+  workspaceId?: string; // New relational field
   projectId?: string; // Linked Project ID
 }
 

@@ -1,4 +1,5 @@
 
+
 import React, { useState } from 'react';
 import { Project, Client, Transaction } from '../types';
 import { 
@@ -19,6 +20,7 @@ interface ProjectsViewProps {
   onDeleteProject: (id: string) => void;
   onDeleteClient: (id: string) => void;
   isVisible: boolean;
+  canEdit: boolean;
 }
 
 const ProjectsView: React.FC<ProjectsViewProps> = ({ 
@@ -31,7 +33,8 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
   onUpdateClient,
   onDeleteProject,
   onDeleteClient,
-  isVisible 
+  isVisible,
+  canEdit
 }) => {
   const [activeTab, setActiveTab] = useState<'projects' | 'clients'>('projects');
   
@@ -48,6 +51,7 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
 
   // --- Client Logic ---
   const handleOpenClientModal = (client?: Client) => {
+    if(!canEdit) return;
     if (client) {
       setEditingClient(client);
       setClientForm({ name: client.name, phone: client.phone, document: client.document, email: client.email || '' });
@@ -70,6 +74,7 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
 
   // --- Project Logic ---
   const handleOpenProjectModal = (project?: Project) => {
+    if(!canEdit) return;
     if (project) {
       setEditingProject(project);
       const dateString = project.startDate.toLocaleDateString('en-CA'); 
@@ -144,12 +149,14 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
             </button>
          </div>
          
-         <button 
-            onClick={() => activeTab === 'projects' ? handleOpenProjectModal() : handleOpenClientModal()}
-            className="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-xl font-bold text-sm flex items-center gap-2 shadow-lg shadow-blue-600/20 transition-all"
-         >
-            <Plus size={18} /> {activeTab === 'projects' ? 'Novo Projeto' : 'Novo Cliente'}
-         </button>
+         {canEdit && (
+             <button 
+                onClick={() => activeTab === 'projects' ? handleOpenProjectModal() : handleOpenClientModal()}
+                className="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-xl font-bold text-sm flex items-center gap-2 shadow-lg shadow-blue-600/20 transition-all"
+             >
+                <Plus size={18} /> {activeTab === 'projects' ? 'Novo Projeto' : 'Novo Cliente'}
+             </button>
+         )}
       </div>
 
       {/* --- PROJECTS TAB --- */}
@@ -161,14 +168,16 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
                         <div className="p-5 border-b border-slate-100 dark:border-slate-700/50 bg-slate-50/50 dark:bg-slate-800/50">
                              <div className="flex justify-between items-start mb-2">
                                 <h3 className="font-bold text-lg text-slate-800 dark:text-white line-clamp-1 flex-1 pr-2" title={project.name}>{project.name}</h3>
-                                <div className="flex gap-1 shrink-0">
-                                     <button onClick={() => handleOpenProjectModal(project)} className="p-1.5 rounded-lg text-slate-400 hover:text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors">
-                                         <Edit2 size={16} />
-                                     </button>
-                                     <button onClick={() => onDeleteProject(project.id)} className="p-1.5 rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors">
-                                         <Trash2 size={16} />
-                                     </button>
-                                </div>
+                                {canEdit && (
+                                    <div className="flex gap-1 shrink-0">
+                                         <button onClick={() => handleOpenProjectModal(project)} className="p-1.5 rounded-lg text-slate-400 hover:text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors">
+                                             <Edit2 size={16} />
+                                         </button>
+                                         <button onClick={() => onDeleteProject(project.id)} className="p-1.5 rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors">
+                                             <Trash2 size={16} />
+                                         </button>
+                                    </div>
+                                )}
                              </div>
                              <p className="text-xs font-bold text-slate-500 uppercase tracking-wide flex items-center gap-2">
                                 <Users size={12} className="text-slate-400" /> 
@@ -202,15 +211,17 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
                 );
             })}
             
-            <button 
-                onClick={() => handleOpenProjectModal()}
-                className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border-2 border-dashed border-slate-200 dark:border-slate-700 p-6 flex flex-col items-center justify-center gap-4 text-slate-400 hover:border-blue-500 hover:text-blue-500 transition-all min-h-[250px] group"
-            >
-                <div className="w-16 h-16 rounded-full bg-slate-50 dark:bg-slate-900 flex items-center justify-center group-hover:bg-blue-50 dark:group-hover:bg-blue-900/20 transition-colors">
-                    <Plus size={32} />
-                </div>
-                <span className="font-bold group-hover:scale-105 transition-transform">Novo Projeto</span>
-            </button>
+            {canEdit && (
+                <button 
+                    onClick={() => handleOpenProjectModal()}
+                    className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border-2 border-dashed border-slate-200 dark:border-slate-700 p-6 flex flex-col items-center justify-center gap-4 text-slate-400 hover:border-blue-500 hover:text-blue-500 transition-all min-h-[250px] group"
+                >
+                    <div className="w-16 h-16 rounded-full bg-slate-50 dark:bg-slate-900 flex items-center justify-center group-hover:bg-blue-50 dark:group-hover:bg-blue-900/20 transition-colors">
+                        <Plus size={32} />
+                    </div>
+                    <span className="font-bold group-hover:scale-105 transition-transform">Novo Projeto</span>
+                </button>
+            )}
         </div>
       )}
 
@@ -240,10 +251,12 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
                                  <FileText size={14} /> {client.document}
                              </td>
                              <td className="p-4 text-center">
-                                 <div className="flex justify-center gap-2">
-                                     <button onClick={() => handleOpenClientModal(client)} className="text-blue-500 hover:bg-blue-50 p-1.5 rounded"><Edit2 size={16} /></button>
-                                     <button onClick={() => onDeleteClient(client.id)} className="text-red-500 hover:bg-red-50 p-1.5 rounded"><Trash2 size={16} /></button>
-                                 </div>
+                                 {canEdit && (
+                                     <div className="flex justify-center gap-2">
+                                         <button onClick={() => handleOpenClientModal(client)} className="text-blue-500 hover:bg-blue-50 p-1.5 rounded"><Edit2 size={16} /></button>
+                                         <button onClick={() => onDeleteClient(client.id)} className="text-red-500 hover:bg-red-50 p-1.5 rounded"><Trash2 size={16} /></button>
+                                     </div>
+                                 )}
                              </td>
                          </tr>
                      ))}
