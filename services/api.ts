@@ -33,18 +33,21 @@ const sanitizePayload = (payload: any) => {
 const handleError = (error: any, context: string) => {
   console.error(`[API ERROR] ${context}:`, error);
   
-  if (error.message?.includes('schema cache') || error.code === 'PGRST204') {
-    // Retorna null para sinalizar ao caller que deve usar fallback
-    return null;
+  // Tratamento específico para tabelas ou colunas inexistentes (Banco desatualizado)
+  if (
+    error.message?.includes('schema cache') || 
+    error.code === 'PGRST204' || // Coluna não encontrada
+    error.code === 'PGRST205' || // Tabela não encontrada
+    error.code === '42P01'       // Undefined table (Postgres)
+  ) {
+    return null; // Retorna null para sinalizar fallback
   }
+
   if (error.code === '42703') { 
     console.warn("Erro de coluna ignorado (fallback):", error.message);
     return null;
   }
-  if (error.code === '42P01') {
-      // Tabela não existe
-      return null;
-  }
+  
   if (error.code === '42501') { 
     throw new Error('Permissão negada. Você não tem permissão para realizar esta ação neste espaço.');
   }
@@ -74,8 +77,8 @@ export const workspaceService = {
             .eq('owner_id', userId);
 
         if (ownerError) {
-             // Se der erro (ex: tabela não existe), assumimos array vazio para triggerar modo legado
-             console.warn("Workspaces table check failed, defaulting to empty/legacy.");
+             const handled = handleError(ownerError, 'listOwnedWorkspaces');
+             // Se handleError retornou null (erro de tabela), assumimos vazio
              owned = [];
         } else {
              owned = data || [];
@@ -93,7 +96,7 @@ export const workspaceService = {
             .eq('email', email); 
         
         if (memberError) {
-             console.warn("Member workspaces check failed.");
+             const handled = handleError(memberError, 'listMemberWorkspaces');
              memberOf = [];
         } else {
              memberOf = data || [];
@@ -146,7 +149,10 @@ export const workspaceService = {
         .select()
         .single();
     
-    if (error) handleError(error, 'createWorkspace');
+    if (error) {
+        handleError(error, 'createWorkspace');
+        throw new Error("Falha ao criar workspace (Legacy Mode?)");
+    }
 
     // Semeia dados padrão para este novo workspace
     await seedDatabase(userId, workspace.id, type);
@@ -155,13 +161,18 @@ export const workspaceService = {
   },
 
   async getMembers(workspaceId: string) {
+    if (workspaceId === 'legacy') return [];
+
     const { data, error } = await supabase
         .from('workspace_members')
         .select('*')
         .eq('workspace_id', workspaceId);
     
-    if (error) handleError(error, 'getWorkspaceMembers');
-    return data as WorkspaceMember[];
+    if (error) {
+        handleError(error, 'getWorkspaceMembers');
+        return [];
+    }
+    return (data || []) as WorkspaceMember[];
   },
 
   async inviteMember(workspaceId: string, email: string, role: Role) {
@@ -199,7 +210,7 @@ export const workspaceService = {
 };
 
 
-// --- SEED DATABASE (UPDATED) ---
+// --- SEED DATABASE ---
 
 export const seedDatabase = async (userId: string, workspaceId: string, type: AccountType) => {
   try {
@@ -209,28 +220,30 @@ export const seedDatabase = async (userId: string, workspaceId: string, type: Ac
     let defaultCategories = [];
     let defaultTags = [];
 
+    const cleanWorkspaceId = workspaceId === 'legacy' ? undefined : workspaceId;
+
     if (type === 'personal') {
          defaultCategories = [
-            { workspace_id: workspaceId, user_id: userId, name: 'Moradia', type: 'expense', scope: 'personal' },
-            { workspace_id: workspaceId, user_id: userId, name: 'Alimentação', type: 'expense', scope: 'personal' },
-            { workspace_id: workspaceId, user_id: userId, name: 'Lazer', type: 'expense', scope: 'personal' },
-            { workspace_id: workspaceId, user_id: userId, name: 'Investimento', type: 'expense', scope: 'personal' },
+            { workspace_id: cleanWorkspaceId, user_id: userId, name: 'Moradia', type: 'expense', scope: 'personal' },
+            { workspace_id: cleanWorkspaceId, user_id: userId, name: 'Alimentação', type: 'expense', scope: 'personal' },
+            { workspace_id: cleanWorkspaceId, user_id: userId, name: 'Lazer', type: 'expense', scope: 'personal' },
+            { workspace_id: cleanWorkspaceId, user_id: userId, name: 'Investimento', type: 'expense', scope: 'personal' },
         ];
         defaultTags = [
-            { workspace_id: workspaceId, user_id: userId, label: 'Urgente', color: 'red', scope: 'personal' },
-            { workspace_id: workspaceId, user_id: userId, label: 'Pago', color: 'green', scope: 'personal' }
+            { workspace_id: cleanWorkspaceId, user_id: userId, label: 'Urgente', color: 'red', scope: 'personal' },
+            { workspace_id: cleanWorkspaceId, user_id: userId, label: 'Pago', color: 'green', scope: 'personal' }
         ];
     } else {
         defaultCategories = [
-            { workspace_id: workspaceId, user_id: userId, name: 'Vendas', type: 'income', scope: 'business' },
-            { workspace_id: workspaceId, user_id: userId, name: 'Projetos', type: 'income', scope: 'business' },
-            { workspace_id: workspaceId, user_id: userId, name: 'Custos Fixos', type: 'expense', scope: 'business' },
-            { workspace_id: workspaceId, user_id: userId, name: 'Operacional', type: 'expense', scope: 'business' }
+            { workspace_id: cleanWorkspaceId, user_id: userId, name: 'Vendas', type: 'income', scope: 'business' },
+            { workspace_id: cleanWorkspaceId, user_id: userId, name: 'Projetos', type: 'income', scope: 'business' },
+            { workspace_id: cleanWorkspaceId, user_id: userId, name: 'Custos Fixos', type: 'expense', scope: 'business' },
+            { workspace_id: cleanWorkspaceId, user_id: userId, name: 'Operacional', type: 'expense', scope: 'business' }
         ];
         defaultTags = [
-            { workspace_id: workspaceId, user_id: userId, label: 'Urgente', color: 'red', scope: 'business' },
-            { workspace_id: workspaceId, user_id: userId, label: 'Recorrente', color: 'blue', scope: 'business' },
-            { workspace_id: workspaceId, user_id: userId, label: 'Pago', color: 'green', scope: 'business' }
+            { workspace_id: cleanWorkspaceId, user_id: userId, label: 'Urgente', color: 'red', scope: 'business' },
+            { workspace_id: cleanWorkspaceId, user_id: userId, label: 'Recorrente', color: 'blue', scope: 'business' },
+            { workspace_id: cleanWorkspaceId, user_id: userId, label: 'Pago', color: 'green', scope: 'business' }
         ];
     }
 
@@ -247,7 +260,7 @@ export const seedDatabase = async (userId: string, workspaceId: string, type: Ac
   }
 };
 
-// --- TRANSACTIONS (UPDATED to use workspace_id) ---
+// --- TRANSACTIONS ---
 export const transactionService = {
   async fetchAll(userId: string, workspaceId: string) {
     let query = supabase.from('transactions').select('*');
@@ -258,7 +271,10 @@ export const transactionService = {
     }
     
     const { data, error } = await query;
-    if (error) handleError(error, 'fetchAllTransactions');
+    if (error) {
+        handleError(error, 'fetchAllTransactions');
+        return [];
+    }
     
     return (data || []).map((t: any) => ({
       id: t.id,
@@ -279,7 +295,7 @@ export const transactionService = {
     const { data, error } = await supabase.from('transactions').select('*').eq('project_id', projectId).maybeSingle();
     
     if (error) {
-        console.warn("Erro ao buscar transação por projeto:", error);
+        // Silently fail if legacy or column missing
         return null;
     }
     
@@ -301,9 +317,13 @@ export const transactionService = {
   },
 
   async create(userId: string, tx: Omit<Transaction, 'id'>) {
+    // IMPORTANT: If workspaceId is legacy, pass UNDEFINED so sanitizePayload removes it.
+    // Passing null will cause error if column doesn't exist.
+    const wsId = tx.workspaceId === 'legacy' ? undefined : tx.workspaceId;
+
     const payload = sanitizePayload({
       user_id: userId, 
-      workspace_id: tx.workspaceId === 'legacy' ? null : tx.workspaceId,
+      workspace_id: wsId,
       type: tx.type,
       amount: tx.amount,
       description: tx.description,
@@ -358,7 +378,10 @@ export const transactionService = {
 
   async delete(id: string) {
     const { error, count } = await supabase.from('transactions').delete({ count: 'exact' }).eq('id', id);
-    if (error) return handleError(error, 'deleteTransaction');
+    if (error) {
+        handleError(error, 'deleteTransaction');
+        return false;
+    }
     if (count === 0) throw new Error("Falha ao apagar: A transação não foi encontrada ou você não tem permissão.");
     return true; 
   }
@@ -374,15 +397,19 @@ export const clientService = {
         query = query.eq('workspace_id', workspaceId);
     }
     const { data, error } = await query;
-    if (error) handleError(error, 'fetchAllClients');
+    if (error) {
+        handleError(error, 'fetchAllClients');
+        return [];
+    }
     return (data || []) as Client[];
   },
 
   async create(userId: string, workspaceId: string, client: Omit<Client, 'id'>) {
+    const wsId = workspaceId === 'legacy' ? undefined : workspaceId;
     const payload = sanitizePayload({ 
         ...client, 
         user_id: userId, 
-        workspace_id: workspaceId === 'legacy' ? null : workspaceId 
+        workspace_id: wsId 
     });
     const { data, error } = await supabase.from('clients').insert([payload]).select().single();
     if (error) handleError(error, 'createClient');
@@ -414,7 +441,10 @@ export const projectService = {
         query = query.eq('workspace_id', workspaceId);
     }
     const { data, error } = await query;
-    if (error) handleError(error, 'fetchAllProjects');
+    if (error) {
+        handleError(error, 'fetchAllProjects');
+        return [];
+    }
     
     return (data || []).map((p: any) => ({
       ...p,
@@ -426,9 +456,10 @@ export const projectService = {
   },
 
   async create(userId: string, workspaceId: string, project: Omit<Project, 'id'>) {
+    const wsId = workspaceId === 'legacy' ? undefined : workspaceId;
     const payload = sanitizePayload({
       user_id: userId,
-      workspace_id: workspaceId === 'legacy' ? null : workspaceId,
+      workspace_id: wsId,
       name: project.name,
       client_id: project.clientId || null,
       value: project.value,
@@ -494,14 +525,18 @@ export const categoryService = {
         query = query.eq('workspace_id', workspaceId);
     }
     const { data, error } = await query;
-    if (error) handleError(error, 'fetchAllCategories');
+    if (error) {
+        handleError(error, 'fetchAllCategories');
+        return [];
+    }
     
     return (data || []) as (Category & { scope: string })[];
   },
   async create(userId: string, workspaceId: string, cat: Category, scope: AccountType) {
+    const wsId = workspaceId === 'legacy' ? undefined : workspaceId;
     const payload = sanitizePayload({ 
         user_id: userId, 
-        workspace_id: workspaceId === 'legacy' ? null : workspaceId, 
+        workspace_id: wsId, 
         name: cat.name, 
         type: cat.type, 
         scope 
@@ -527,14 +562,18 @@ export const tagService = {
         query = query.eq('workspace_id', workspaceId);
     }
     const { data, error } = await query;
-    if (error) handleError(error, 'fetchAllTags');
+    if (error) {
+        handleError(error, 'fetchAllTags');
+        return [];
+    }
 
     return (data || []) as (Tag & { scope: string })[];
   },
   async create(userId: string, workspaceId: string, tag: Tag, scope: AccountType) {
+    const wsId = workspaceId === 'legacy' ? undefined : workspaceId;
     const payload = sanitizePayload({ 
         user_id: userId, 
-        workspace_id: workspaceId === 'legacy' ? null : workspaceId, 
+        workspace_id: wsId, 
         label: tag.label, 
         color: tag.color, 
         scope 
@@ -560,7 +599,7 @@ export const fixedCostService = {
         query = query.eq('workspace_id', workspaceId);
     }
     const { data, error } = await query;
-    if (error) { console.warn(error); return []; }
+    if (error) { console.warn("Fixed costs error/missing", error); return []; }
     return (data || []).map((d: any) => ({
       id: d.id, 
       name: d.name, 
@@ -569,9 +608,10 @@ export const fixedCostService = {
     }));
   },
   async create(userId: string, workspaceId: string, cost: FixedCostTemplate) {
+    const wsId = workspaceId === 'legacy' ? undefined : workspaceId;
     const payload = sanitizePayload({ 
         user_id: userId, 
-        workspace_id: workspaceId === 'legacy' ? null : workspaceId, 
+        workspace_id: wsId, 
         name: cost.name, 
         value: cost.defaultAmount, 
         due_day: cost.dayOfMonth 

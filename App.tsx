@@ -200,6 +200,11 @@ const App: React.FC = () => {
 
   const handleCreateWorkspace = async (name: string, type: AccountType) => {
       if (!user) return;
+      if (currentWorkspace?.id === 'legacy') {
+          alert('Não é possível criar novos espaços enquanto o banco de dados não for migrado. Contate o suporte.');
+          return;
+      }
+
       try {
           const newWs = await workspaceService.create(user.id, name, type);
           const fullWs = { ...newWs, role: 'owner' as Role };

@@ -1,4 +1,5 @@
 
+
 import React, { useState, useEffect } from 'react';
 import { WorkspaceMember, Role } from '../types';
 import { X, UserPlus, Shield, Trash2, Mail, CheckCircle, AlertCircle } from 'lucide-react';
@@ -33,10 +34,12 @@ const WorkspaceSettings: React.FC<WorkspaceSettingsProps> = ({
     setLoading(true);
     try {
       const data = await workspaceService.getMembers(workspaceId);
-      setMembers(data);
+      // Ensure data is array, default to empty if null/undefined
+      setMembers(Array.isArray(data) ? data : []);
     } catch (e) {
       console.error(e);
       setError('Erro ao carregar membros.');
+      setMembers([]); // Fallback
     } finally {
       setLoading(false);
     }
@@ -94,7 +97,7 @@ const WorkspaceSettings: React.FC<WorkspaceSettingsProps> = ({
         <div className="p-6 flex-1 overflow-y-auto custom-scrollbar">
             
             {/* Invite Form */}
-            {isAdmin && (
+            {isAdmin && workspaceId !== 'legacy' && (
                 <div className="bg-slate-50 dark:bg-slate-800/50 p-5 rounded-xl border border-slate-100 dark:border-slate-700 mb-8">
                     <h3 className="text-sm font-bold text-slate-700 dark:text-white mb-3 flex items-center gap-2">
                         <UserPlus size={16} className="text-blue-500" /> Convidar Novo Membro
@@ -135,6 +138,13 @@ const WorkspaceSettings: React.FC<WorkspaceSettingsProps> = ({
                             Convidar
                         </button>
                     </form>
+                </div>
+            )}
+            
+            {workspaceId === 'legacy' && (
+                <div className="p-4 bg-orange-100 dark:bg-orange-900/20 text-orange-600 dark:text-orange-400 rounded-xl mb-4 text-sm font-bold flex items-center gap-2">
+                    <AlertCircle size={16} />
+                    Funcionalidade de membros indisponível no Modo Legado.
                 </div>
             )}
 
