@@ -18,8 +18,8 @@ const getEnv = (key: string) => {
   return '';
 };
 
-const supabaseUrl = getEnv('https://jqsouhitrqanxyrvalwl.supabase.co');
-const supabaseAnonKey = getEnv('eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Impxc291aGl0cnFhbnh5cnZhbHdsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQyNzIzMzMsImV4cCI6MjA3OTg0ODMzM30.6WxOcdBCelkXKJWUesE_aKZYT5NTBOJiL-bjl0C-6sQ');
+const supabaseUrl = getEnv('###');
+const supabaseAnonKey = getEnv('###');
 
 if (!supabaseUrl || !supabaseAnonKey) {
   console.warn('Supabase URL or Key is missing. Check your environment variables.');
@@ -28,6 +28,6 @@ if (!supabaseUrl || !supabaseAnonKey) {
 // Create client with fallbacks to prevent initialization crash
 // If keys are missing, auth calls will simply fail with an error instead of crashing the app
 export const supabase = createClient(
-  supabaseUrl || 'https://jqsouhitrqanxyrvalwl.supabase.co',
-  supabaseAnonKey || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Impxc291aGl0cnFhbnh5cnZhbHdsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQyNzIzMzMsImV4cCI6MjA3OTg0ODMzM30.6WxOcdBCelkXKJWUesE_aKZYT5NTBOJiL-bjl0C-6sQ'
+  supabaseUrl || '###',
+  supabaseAnonKey || '###'
 );
